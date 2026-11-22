@@ -1,0 +1,776 @@
+/* Practice page additions: duration picker, new help box, category icons,
+   Group Practice card and daily limits. Uses the app's dark palette. */
+
+/* ---------- speaking duration ---------- */
+.duration-picker {
+  width: 100%;
+  max-width: 420px;
+  margin: 4px auto 16px;
+  text-align: left;
+}
+
+.duration-picker-label {
+  margin: 0 0 10px;
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.duration-picker-options {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.duration-chip {
+  padding: 12px 8px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 600;
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease;
+}
+
+.duration-chip:hover {
+  border-color: var(--olive-bright);
+}
+
+.duration-chip.selected {
+  border-color: #c9c592;
+  background: var(--olive-primary);
+}
+
+/* ---------- "Need a little help?" box ---------- */
+.help-modal-box {
+  padding: 16px 18px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--olive-bright);
+  border-radius: var(--radius-md);
+  background: var(--bg-secondary);
+}
+
+.help-modal-bullets {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding-left: 18px;
+  color: var(--text-primary);
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+.help-modal-bullets li::marker {
+  color: var(--olive-bright);
+}
+
+.help-modal-box-note {
+  margin: 14px 0 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-style: italic;
+  line-height: 1.6;
+}
+
+/* ---------- category list with icons ---------- */
+.category-modal-item.category-modal-item-icon {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 14px;
+  font-size: 15px;
+}
+
+.category-modal-icon {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  background: #23251f;
+  color: var(--text-primary);
+}
+
+/* ---------- group practice entry ---------- */
+.group-entry-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  max-width: 420px;
+  margin: 14px auto 0;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: var(--bg-card);
+  color: inherit;
+  text-align: left;
+}
+
+.group-entry-card:hover {
+  border-color: var(--olive-primary);
+}
+
+/* ---------- daily limits ---------- */
+.daily-limits-card {
+  width: 100%;
+  max-width: 420px;
+  margin: 18px auto 0;
+  padding: 14px 16px 6px;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  background: var(--bg-card);
+  text-align: left;
+}
+
+.daily-limits-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+
+.daily-limits-head h3 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.daily-limits-head span {
+  color: var(--challenge-sage);
+  font-size: 12px;
+}
+
+.limit-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 0;
+  border: none;
+  background: none;
+  color: inherit;
+  text-align: left;
+}
+
+.limit-row + .limit-row {
+  border-top: 1px solid var(--border);
+}
+
+.limit-row-icon {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  background: #222820;
+  color: var(--challenge-sage);
+}
+
+.limit-row-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.limit-row-title {
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.limit-row-sub {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.limit-row-bar {
+  display: block;
+  height: 5px;
+  margin-top: 6px;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.07);
+  overflow: hidden;
+}
+
+.limit-row-bar span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #a9c08f;
+}
+
+.limit-row-chev {
+  flex: 0 0 auto;
+  color: var(--text-muted);
+}
+
+@media (min-width: 900px) {
+  .practice-page .practice-select-actions .daily-limits-card,
+  .practice-page .practice-select-actions .group-entry-card,
+  .practice-page .practice-select-actions .duration-picker {
+    max-width: none;
+    margin: 0;
+  }
+}
+
+/* ---------- Solo / Group tabs ---------- */
+.practice-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  width: 100%;
+  max-width: 1040px;
+  margin: -12px 0 22px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--bg-card);
+}
+
+.practice-tab {
+  padding: 12px 8px;
+  border: none;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 15px;
+  font-weight: 600;
+  transition:
+    background 0.2s ease,
+    color 0.2s ease;
+}
+
+.practice-tab:hover {
+  color: var(--text-primary);
+}
+
+.practice-tab.active {
+  background: var(--olive-primary);
+  color: var(--text-primary);
+}
+
+.practice-panel-intro {
+  align-self: flex-start;
+  width: 100%;
+  max-width: 1040px;
+  margin: 0 auto 6px;
+  text-align: left;
+}
+
+.practice-panel-title {
+  margin: 0 0 6px;
+  color: var(--text-primary);
+  font-size: 22px;
+  font-weight: 800;
+}
+
+.practice-panel-sub {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.practice-panel-sub svg {
+  flex: 0 0 auto;
+}
+
+.practice-solo-intro {
+  margin-bottom: 22px;
+}
+
+.practice-group-panel {
+  display: flex;
+  flex-direction: column;
+  align-self: flex-start;
+  width: 100%;
+  max-width: 1040px;
+  margin: 0 auto;
+}
+
+.practice-group-panel .practice-panel-intro {
+  margin-bottom: 4px;
+}
+
+/* ---------- "Ready to practise with others?" ---------- */
+.practice-others-card {
+  width: 100%;
+  max-width: 420px;
+  margin: 14px auto 0;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-card);
+  text-align: left;
+}
+
+.practice-others-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.practice-others-icon {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: var(--radius-md);
+  background: var(--bg-secondary);
+  color: var(--olive-bright);
+}
+
+.practice-others-head > span:last-child {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.practice-others-title {
+  color: var(--text-primary);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.practice-others-sub {
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.practice-others-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  margin-top: 12px;
+  padding: 11px 16px;
+  border: none;
+  /* Brand call-to-action: same colour and radius as .primary-button. */
+  border-radius: 10px;
+  background: var(--olive-primary);
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 600;
+  transition: background 0.2s ease;
+}
+
+.practice-others-btn:hover {
+  background: var(--olive-bright);
+}
+
+/* ---------- Spin the Jar sheet ---------- */
+.spin-sheet {
+  text-align: left;
+  max-height: 88vh;
+  max-height: 88dvh;
+  overflow-y: auto;
+}
+
+.spin-sheet-header {
+  align-items: flex-start;
+}
+
+.spin-sheet-sub {
+  margin-top: 4px;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.spin-surprise {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--olive-bright);
+  border-radius: var(--radius-md);
+  background: var(--olive-primary);
+  color: var(--text-primary);
+  text-align: left;
+}
+
+.spin-surprise:hover {
+  background: var(--olive-bright);
+}
+
+.category-modal-icon.spin-surprise-icon {
+  background: rgba(0, 0, 0, 0.22);
+}
+
+.spin-surprise-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.spin-surprise-title {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.spin-surprise-sub {
+  font-size: 12px;
+  opacity: 0.85;
+}
+
+.spin-sheet-divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 16px 0 12px;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.spin-sheet-divider::before,
+.spin-sheet-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+.spin-sheet-list {
+  max-height: none;
+  overflow: visible;
+}
+
+.spin-sheet-list .category-modal-item.category-modal-item-icon {
+  padding: 8px 12px;
+}
+
+.spin-sheet-list .category-modal-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+}
+
+@media (min-width: 900px) {
+  .practice-page .practice-select-actions .practice-others-card {
+    max-width: none;
+    margin: 0;
+  }
+
+  .practice-group-panel .group-entry-card,
+  .practice-group-panel .daily-limits-card {
+    max-width: none;
+  }
+}
+
+/* ---------- Solo: "Choose your level" + AI feedback left today ---------- */
+/* Home tab palette: olive CTA (--olive-primary), cards --bg-card/--border,
+   off-white text. Numbers come from GET /api/practice/ai-allowance. */
+.practice-level-row {
+  display: flex;
+  align-items: stretch;
+  gap: 14px;
+  width: 100%;
+}
+
+.practice-level-col {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.ai-meter {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  padding-left: 14px;
+  border-left: 1px solid var(--border);
+  text-align: right;
+}
+
+.ai-meter-label {
+  margin-bottom: 12px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.ai-meter-box {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 6px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--text-primary);
+  font: inherit;
+  cursor: pointer;
+}
+
+.ai-meter-value {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.ai-meter-info-icon {
+  color: var(--text-secondary);
+}
+
+.ai-meter.is-empty .ai-meter-value,
+.ai-meter.is-locked .ai-meter-value {
+  color: var(--text-secondary);
+}
+
+.ai-meter-note {
+  color: var(--text-muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.ai-meter-pips {
+  display: flex;
+  gap: 4px;
+}
+
+.ai-meter-pips span {
+  width: 12px;
+  height: 4px;
+  border-radius: 4px;
+  background: var(--border);
+}
+
+.ai-meter-pips span.on {
+  background: var(--olive-bright);
+}
+
+.ai-meter-bar {
+  display: block;
+  width: 72px;
+  height: 4px;
+  border-radius: 4px;
+  background: var(--border);
+  overflow: hidden;
+}
+
+.ai-meter-bar span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--olive-bright);
+}
+
+.ai-meter-box:focus-visible {
+  outline: 2px solid var(--olive-bright);
+  outline-offset: 4px;
+  border-radius: 6px;
+}
+
+.ai-meter-info {
+  margin: 10px 0 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.5;
+  text-align: left;
+}
+
+.ai-nudge {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  margin-top: 14px;
+  padding: 12px 12px 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--bg-card);
+  text-align: left;
+}
+
+.ai-nudge-icon {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  background: var(--bg-secondary);
+  color: var(--olive-bright);
+}
+
+.ai-nudge-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.ai-nudge-text strong {
+  color: var(--text-primary);
+  font-weight: 700;
+}
+
+.ai-nudge-btn {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 14px;
+  border: none;
+  border-radius: 10px;
+  background: var(--olive-primary);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.ai-nudge-btn:hover {
+  background: var(--olive-bright);
+}
+
+@media (max-width: 360px) {
+  .practice-level-row {
+    gap: 10px;
+  }
+
+  .ai-meter {
+    padding-left: 10px;
+  }
+
+  .ai-nudge {
+    flex-wrap: wrap;
+  }
+
+  .ai-nudge-icon {
+    display: none;
+  }
+
+  .ai-nudge-text {
+    flex-basis: 100%;
+  }
+}
+
+/* ---------- Round 7 ---------- */
+
+/* Desktop: the Solo/Group tabs and everything under them line up with the
+   "Practice Time" heading on the left, instead of floating in the middle. */
+@media (min-width: 900px) {
+  .practice-page > .practice-tabs,
+  .practice-page > .practice-panel-intro,
+  .practice-page > .practice-group-panel,
+  .practice-page > .practice-select-layout {
+    align-self: flex-start;
+    margin-left: 0;
+    margin-right: auto;
+  }
+}
+
+/* "Ready to practise with others?": a smaller, quieter card. */
+.practice-others-card {
+  max-width: 360px;
+  margin-top: 12px;
+  padding: 12px;
+}
+
+.practice-others-head {
+  gap: 10px;
+}
+
+.practice-others-icon {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+}
+
+.practice-others-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.practice-others-head > span:last-child {
+  gap: 2px;
+}
+
+.practice-others-title {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.practice-others-sub {
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.practice-others-btn {
+  gap: 8px;
+  margin-top: 10px;
+  padding: 8px 12px;
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+/* Round 8: the button only wraps its text and starts on the same line as
+   "Ready to practise with others?" (icon 30px + 10px gap), so it no longer
+   competes with Spin the jar. */
+.practice-others-btn {
+  display: inline-flex;
+  width: auto;
+  max-width: calc(100% - 40px);
+  margin-left: 40px;
+  padding: 7px 12px;
+  font-size: 12.5px;
+  border-radius: 8px;
+  white-space: nowrap;
+}
+
+@media (max-width: 340px) {
+  .practice-others-btn {
+    white-space: normal;
+    text-align: left;
+  }
+}
+
+/* Round 10 (Sheriff, 2026-11-19): "Ready to practise with others?" card.
+   Smaller subtext ("and" starts the second line) and the button centred. */
+.practice-others-sub {
+  font-size: 11.5px;
+}
+
+.practice-others-btn {
+  display: flex;
+  width: fit-content;
+  max-width: 100%;
+  margin-left: auto;
+  margin-right: auto;
+}

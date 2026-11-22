@@ -1,0 +1,815 @@
+/* Research Mode: intro, subject popup, loading and research workspace.
+   Home tab palette only (globals.css tokens); off-white = --text-primary. */
+
+/* ---------- intro ---------- */
+.rm-page {
+  width: 100%;
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+.rm-head {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 36px;
+  margin-top: 4px;
+}
+
+.rm-head .rm-back {
+  top: 50%;
+  left: 0;
+  transform: translateY(-50%);
+}
+
+.rm-eyebrow {
+  margin: 0;
+}
+
+.rm-title {
+  max-width: 560px;
+  margin: 28px auto 10px;
+  color: var(--text-primary);
+  font-size: clamp(22px, 3vw, 30px);
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+.rm-subtitle {
+  max-width: 520px;
+  margin: 0 auto 28px;
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.rm-howto {
+  width: 100%;
+  text-align: left;
+}
+
+.rm-section-title {
+  margin: 0 0 8px;
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+}
+
+.rm-section-sub {
+  margin: 0 0 16px;
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.rm-howto-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.rm-howto-card {
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-card);
+}
+
+.rm-howto-num {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--olive-bright);
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.rm-howto-card h3 {
+  margin: 0 0 6px;
+  color: var(--text-primary);
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.rm-howto-card p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.rm-cta {
+  max-width: 420px;
+  margin-top: 26px;
+}
+
+/* ---------- "What are we exploring today?" ---------- */
+.rm-sheet {
+  text-align: left;
+  max-height: 88vh;
+  max-height: 88dvh;
+  overflow-y: auto;
+}
+
+.rm-sheet-header {
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.rm-sheet-header h2 {
+  font-size: 20px;
+  line-height: 1.25;
+}
+
+.rm-sheet-sub {
+  margin-top: 6px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.rm-subject-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.rm-subject {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  padding: 14px 4px;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-primary);
+  text-align: left;
+  transition: background 0.2s ease;
+}
+
+.rm-subject:hover,
+.rm-subject:focus-visible {
+  background: var(--bg-secondary);
+}
+
+.rm-subject-num {
+  display: grid;
+  flex: 0 0 32px;
+  place-items: center;
+  color: var(--olive-bright);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.rm-subject-text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.rm-subject-title {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.rm-subject-sub {
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.rm-subject-surprise {
+  padding-top: 6px;
+}
+
+/* ---------- loading ---------- */
+.rm-loading {
+  justify-content: center;
+  min-height: 60vh;
+}
+
+.rm-loading-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  max-width: 380px;
+  padding: 32px 24px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-card);
+}
+
+.rm-loading-title {
+  margin: 6px 0 6px;
+  color: var(--text-primary);
+  font-size: 22px;
+  font-weight: 800;
+}
+
+.rm-loading-sub {
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+/* ---------- workspace ---------- */
+.rm-work-grid,
+.rm-work-main,
+.rm-work-side {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+}
+
+.rm-topic-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  width: 100%;
+  margin: 4px 0 24px;
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--olive-bright);
+  border-radius: var(--radius-lg);
+  background: var(--bg-card);
+  text-align: left;
+}
+
+.rm-chip {
+  display: inline-flex;
+  align-items: center;
+  margin-bottom: 12px;
+  padding: 5px 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.rm-topic-label {
+  margin-bottom: 8px;
+  color: var(--olive-bright);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.rm-topic-text {
+  color: var(--text-primary);
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.rm-topic-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  margin-top: 16px;
+}
+
+.rm-search-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 14px;
+  border: 1px solid var(--text-primary);
+  border-radius: 999px;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.rm-search-btn:hover {
+  background: rgba(241, 236, 222, 0.06);
+}
+
+.rm-new-topic {
+  margin: 0;
+}
+
+.rm-ring {
+  width: 220px;
+  height: 220px;
+  margin-bottom: 20px;
+}
+
+.rm-timer-btn,
+.rm-done-btn {
+  width: 100%;
+  max-width: 420px;
+}
+
+.rm-secondary-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  max-width: 420px;
+  margin-bottom: 18px;
+  padding: 13px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-card);
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.rm-secondary-btn:hover {
+  border-color: var(--olive-bright);
+}
+
+.rm-timeup {
+  max-width: 320px;
+  margin: 0 0 18px;
+  color: var(--text-primary);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.rm-toolkit {
+  width: 100%;
+  margin-bottom: 20px;
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-card);
+  text-align: left;
+}
+
+.rm-toolkit-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+  color: var(--text-primary);
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.rm-toolkit-head svg,
+.rm-toolkit-title svg {
+  flex: 0 0 auto;
+  color: var(--olive-bright);
+}
+
+.rm-toolkit-item + .rm-toolkit-item {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+.rm-toolkit-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  color: var(--text-primary);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.rm-toolkit-text {
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.rm-hint {
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.rm-leave {
+  text-align: center;
+}
+
+.rm-leave .spin-jar-btn {
+  width: 100%;
+  margin: 18px 0 12px;
+}
+
+.rm-leave-text {
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+/* ---------- tablet and desktop ---------- */
+@media (min-width: 760px) {
+  .rm-howto-card {
+    padding: 18px;
+  }
+}
+
+@media (min-width: 900px) {
+  .session-page.rm-work {
+    width: min(100%, 1040px);
+    max-width: 1040px;
+  }
+
+  .rm-work-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(300px, 0.9fr);
+    align-items: start;
+    gap: 32px;
+  }
+
+  .rm-howto-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .rm-page {
+    max-width: 1040px;
+  }
+
+  .rm-howto-grid {
+    gap: 14px;
+  }
+}
+
+@media (max-width: 360px) {
+  .rm-howto-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ---------- wider research workspace (Sheriff, 2026-11-06) ----------
+   Topic card, toolkit card and the CTA buttons fill the page width
+   instead of sitting in a narrow column. */
+.session-page.rm-work {
+  width: 100%;
+  max-width: 760px;
+}
+
+.rm-topic-card {
+  padding: 22px 22px 24px;
+}
+
+.rm-topic-text {
+  font-size: 20px;
+}
+
+.rm-toolkit {
+  padding: 22px 22px 24px;
+}
+
+.rm-timer-btn,
+.rm-done-btn,
+.rm-secondary-btn {
+  width: 100%;
+  max-width: none;
+}
+
+.rm-search-btn,
+.rm-new-topic {
+  min-height: 42px;
+}
+
+@media (max-width: 480px) {
+  .rm-topic-card,
+  .rm-toolkit {
+    padding: 18px;
+  }
+
+  .rm-topic-text {
+    font-size: 18px;
+  }
+
+  .rm-topic-actions {
+    width: 100%;
+  }
+
+  .rm-search-btn {
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+}
+
+@media (min-width: 900px) {
+  .session-page.rm-work {
+    width: min(100%, 1180px);
+    max-width: 1180px;
+  }
+
+  .rm-work-grid {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 28px;
+  }
+
+  .rm-work-side {
+    align-self: stretch;
+  }
+
+  .rm-topic-card {
+    margin-top: 0;
+  }
+}
+
+.spin-jar-btn.rm-timer-btn,
+.spin-jar-btn.rm-done-btn {
+  width: 100%;
+  max-width: none;
+  margin-left: 0;
+  margin-right: 0;
+}
+
+/* ---------- Round 4 (Sheriff, 2026-11-10) ----------
+   Smaller "How to research better" section, smaller CTAs, normal-case
+   labels, and "Surprise me" on the brand call-to-action colour. */
+.rm-section-title {
+  font-size: 13px;
+  letter-spacing: 0;
+}
+
+.rm-section-sub {
+  margin-bottom: 12px;
+  font-size: 13px;
+}
+
+.rm-howto-grid {
+  gap: 8px;
+}
+
+.rm-howto-card,
+.rm-howto-card:is(div) {
+  padding: 12px;
+  border-radius: var(--radius-md);
+}
+
+.rm-howto-num {
+  margin-bottom: 6px;
+  font-size: 13px;
+}
+
+.rm-howto-card h3 {
+  margin-bottom: 4px;
+  font-size: 13px;
+}
+
+.rm-howto-card p {
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.spin-jar-btn.rm-cta {
+  max-width: 340px;
+  margin-top: 20px;
+  padding: 12px 16px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.spin-jar-btn.rm-timer-btn,
+.spin-jar-btn.rm-done-btn {
+  padding: 11px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  border-radius: 10px;
+}
+
+.rm-done-btn {
+  margin-bottom: 16px;
+}
+
+.rm-work-side .rm-hint {
+  margin: 0 0 14px;
+}
+
+.rm-subject.rm-subject-surprise {
+  margin-bottom: 6px;
+  padding: 12px 14px;
+  border-bottom: none;
+  border-radius: var(--radius-md);
+  background: var(--olive-primary);
+  color: #ffffff;
+}
+
+.rm-subject.rm-subject-surprise:hover,
+.rm-subject.rm-subject-surprise:focus-visible {
+  background: var(--olive-bright);
+}
+
+.rm-subject-surprise .rm-subject-num,
+.rm-subject-surprise .rm-subject-sub {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+@media (min-width: 760px) {
+  .rm-howto-card,
+  .rm-howto-card:is(div) {
+    padding: 14px;
+  }
+}
+
+/* ---------- Round 7 ---------- */
+/* Heading on two lines, and the four steps always 2 x 2 (phone to desktop). */
+.rm-title span {
+  display: block;
+}
+
+.rm-howto-grid,
+.rm-page .rm-howto-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+@media (min-width: 900px) {
+  .rm-howto-grid {
+    max-width: 760px;
+    margin: 0 auto;
+  }
+}
+
+/* ---------- Round 8 (Sheriff, 2026-11-14) ----------
+   "Learn something new / Be able to explain it" redesigned with a clear type
+   scale: page title > section title > step title > body. */
+.rm-title {
+  margin: 22px auto 10px;
+  font-size: clamp(25px, 6.6vw, 34px);
+  font-weight: 800;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+}
+
+.rm-title span + span {
+  color: var(--olive-bright);
+}
+
+.rm-subtitle {
+  max-width: 540px;
+  margin: 0 auto 24px;
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+.rm-howto {
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-card);
+}
+
+.rm-section-title {
+  margin: 0 0 6px;
+  font-size: 19px;
+  font-weight: 700;
+  line-height: 1.3;
+  letter-spacing: 0;
+}
+
+.rm-section-sub {
+  margin: 0 0 16px;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.rm-howto-grid,
+.rm-page .rm-howto-grid {
+  gap: 10px;
+}
+
+.rm-howto-card,
+.rm-howto-card:is(div) {
+  display: flex;
+  flex-direction: column;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-secondary);
+}
+
+.rm-howto-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.rm-howto-icon {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  background: rgba(100, 103, 66, 0.3);
+  color: var(--olive-bright);
+}
+
+.rm-howto-num {
+  display: inline;
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.rm-howto-card h3 {
+  margin: 0 0 6px;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.rm-howto-card p {
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.spin-jar-btn.rm-cta {
+  max-width: 420px;
+  margin-top: 22px;
+  padding: 13px 18px;
+  font-size: 15px;
+}
+
+@media (min-width: 760px) {
+  .rm-howto {
+    padding: 24px;
+  }
+
+  .rm-howto-card,
+  .rm-howto-card:is(div) {
+    padding: 18px;
+  }
+
+  .rm-howto-card h3 {
+    font-size: 16px;
+  }
+
+  .rm-howto-card p {
+    font-size: 14px;
+  }
+}
+
+@media (min-width: 900px) {
+  .rm-howto {
+    max-width: 760px;
+    margin: 0 auto;
+  }
+
+  .rm-howto-grid {
+    max-width: none;
+  }
+}
+
+@media (max-width: 360px) {
+  .rm-howto {
+    padding: 14px;
+  }
+
+  .rm-howto-card,
+  .rm-howto-card:is(div) {
+    padding: 12px;
+  }
+
+  .rm-section-title {
+    font-size: 17px;
+  }
+
+  .rm-howto-card h3 {
+    font-size: 14px;
+  }
+
+  .rm-howto-card p {
+    font-size: 12.5px;
+  }
+}
+
+/* ---------- Round 9 (Sheriff, 2026-11-18) ----------
+   Headings a bit smaller so they match Yap Mode ("No prompt. Just talk." is
+   22px), and "Your research toolkit" is underlined. */
+.rm-title {
+  font-size: 22px;
+  line-height: 1.25;
+  letter-spacing: 0;
+}
+
+.rm-section-title {
+  font-size: 16px;
+}
+
+@media (max-width: 360px) {
+  .rm-title {
+    font-size: 21px;
+  }
+
+  .rm-section-title {
+    font-size: 15px;
+  }
+}
+
+.rm-toolkit-head-text {
+  text-decoration: underline;
+  text-decoration-color: var(--olive-bright);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 6px;
+}

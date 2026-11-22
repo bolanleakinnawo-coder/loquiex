@@ -1,0 +1,2914 @@
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  Navigate,
+  useLocation,
+  useNavigate,
+  useParams,
+} from "react-router-dom";
+import {
+  ArrowLeft,
+  ArrowRight,
+  AudioLines,
+  CalendarClock,
+  Clock,
+  ClockAlert,
+  Crown,
+  Globe,
+  Infinity as InfinityIcon,
+  Bell,
+  BellRing,
+  CalendarCheck,
+  CalendarDays,
+  Check,
+  ChevronDown,
+  Hand,
+  Info,
+  LoaderCircle,
+  LockKeyhole,
+  MessageSquareText,
+  MessagesSquare,
+  Mic,
+  MicOff,
+  PencilLine,
+  PhoneOff,
+  Plus,
+  RefreshCw,
+  Shuffle,
+  Sprout,
+  Target,
+  Users,
+  Volume2,
+  WifiOff,
+  Sparkles,
+} from "lucide-react";
+import {
+  fetchGroupUsage,
+  getUsage,
+  canHostUnlimited,
+  maxHostSeats,
+  groupPracticePlanNames,
+  hasGroupPractice,
+  refreshPlanFromServer,
+} from "../data/plans";
+import { CATEGORIES, getRandomPrompt } from "../data/prompts";
+import groupTogetherArt from "../assets/group-practice-together.webp";
+import {
+  CODE_LENGTH,
+  lookupCode,
+  normaliseCode,
+  watchRooms,
+} from "../lib/groupCall";
+import { micHelp, micPermissionState, requestMic } from "../lib/microphone";
+import {
+  activeSession,
+  callActions,
+  cancelScheduled,
+  clearEndedCall,
+  fetchScheduled,
+  leaveCall,
+  roomMeta,
+  roomTitle,
+  schedulePractice,
+  setReminder,
+  startCall,
+  useActiveCall,
+} from "../lib/activeCall";
+import {
+  REMIND_BEFORE_MIN,
+  ensureReminderNotifications,
+  plannedChanged,
+  reminderHelp,
+} from "../lib/practiceReminders";
+import { getMyTeam } from "../lib/team";
+import "../styles/GroupCall.css";
+
+// The Group Practice tab on Practice is the lobby (live public rooms).
+const LOBBY = "/app/practice?tab=group";
+const START = "/app/group-practice/start";
+const CALL = "/app/group-practice/room";
+const JOIN = "/app/group-practice/join";
+
+function categoryOf(id) {
+  return CATEGORIES.find((c) => c.id === id) || null;
+}
+
+const SEAT_CHOICES = [2, 3, 4, 5, 6];
+// Host-led topics are kept short so they read well as a title.
+const TOPIC_MAX = 60;
+
+// 12-hour clock for planning (9:00 pm, not 21:00).
+const HOURS_12 = [12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
+const MINUTES = [
+  "00",
+  "05",
+  "10",
+  "15",
+  "20",
+  "25",
+  "30",
+  "35",
+  "40",
+  "45",
+  "50",
+  "55",
+];
+
+function to24h(hour12, ampm) {
+  const h = Number(hour12) % 12;
+  return ampm === "pm" ? h + 12 : h;
+}
+
+// "9:00 pm" / "10:30 am" in the viewer's own time zone.
+function formatTime12(d) {
+  return d
+    .toLocaleTimeString("en-GB", {
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+    })
+    .replace(/\s?([ap])\.?m\.?/i, (_m, x) => ` ${x.toLowerCase()}m`);
+}
+
+// Shows a code as "K7M 2QF" so it's easy to read out.
+function spacedCode(code = "") {
+  return code.length === 6 ? `${code.slice(0, 3)} ${code.slice(3)}` : code;
+}
+
+async function copyText(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    // Older browsers / non-secure pages.
+    try {
+      const el = document.createElement("textarea");
+      el.value = text;
+      el.setAttribute("readonly", "");
+      el.style.position = "fixed";
+      el.style.opacity = "0";
+      document.body.appendChild(el);
+      el.select();
+      const ok = document.execCommand("copy");
+      el.remove();
+      return ok;
+    } catch {
+      return false;
+    }
+  }
+}
+
+// The 6-character code box + Join button. Used on the rooms page and the
+// join page.
+function CodeForm({ initial = "", busy = false, error = "", onSubmit }) {
+  const [value, setValue] = useState(normaliseCode(initial));
+  const complete = value.length === CODE_LENGTH;
+  return (
+    <form
+      className="gpc-code-form"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (complete && !busy) onSubmit(value);
+      }}
+    >
+      <label className="gpc-code-label" htmlFor="gpc-code-input">
+        Call code
+      </label>
+      <div className="gpc-code-row">
+        <input
+          id="gpc-code-input"
+          className="gpc-code-input"
+          value={value}
+          onChange={(e) => setValue(normaliseCode(e.target.value))}
+          placeholder="K7M2QF"
+          maxLength={CODE_LENGTH + 2}
+          autoComplete="off"
+          autoCapitalize="characters"
+          autoCorrect="off"
+          spellCheck={false}
+          inputMode="text"
+          aria-invalid={Boolean(error)}
+          aria-describedby={error ? "gpc-code-error" : undefined}
+        />
+        <button
+          type="submit"
+          className="gpc-secondary gpc-code-submit"
+          disabled={!complete || busy}
+        >
+          {busy ? <LoaderCircle size={16} className="gpc-spin" /> : null}
+          Join
+        </button>
+      </div>
+      {error && (
+        <p className="gpc-code-error" id="gpc-code-error" role="alert">
+          {error}
+        </p>
+      )}
+    </form>
+  );
+}
+
+function initials(name = "") {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return "?";
+  return (parts[0][0] + (parts[1]?.[0] || "")).toUpperCase();
+}
+
+function Avatar({ member, self = false }) {
+  return (
+    <span className={`gpc-avatar ${self ? "gpc-avatar-self" : ""}`}>
+      {member.avatar ? (
+        <img src={member.avatar} alt="" loading="lazy" />
+      ) : (
+        initials(member.name)
+      )}
+    </span>
+  );
+}
+
+// Usage from the server, falling back to this device's copy.
+// `total` / `left` are TODAY's call minutes (null = unlimited); refreshed
+// every minute so the lobby card counts down.
+function useGroupUsage() {
+  const [usage, setUsage] = useState(() => {
+    const local = getUsage([]).groupMinutes;
+    return { ...local, loaded: false };
+  });
+  useEffect(() => {
+    let alive = true;
+    refreshPlanFromServer()
+      .then(fetchGroupUsage)
+      .then((data) => {
+        if (!alive) return;
+        if (data) setUsage({ ...data, loaded: true });
+        else setUsage((u) => ({ ...u, loaded: true }));
+      });
+    const timer = setInterval(() => {
+      fetchGroupUsage().then((data) => {
+        if (alive && data) setUsage({ ...data, loaded: true });
+      });
+    }, 60 * 1000);
+    return () => {
+      alive = false;
+      clearInterval(timer);
+    };
+  }, []);
+  return [usage, setUsage];
+}
+
+// Round 13 (Sheriff): "1hr 30mins", "1hr", "45mins", "1min".
+function formatCallTime(minutes) {
+  const total = Math.max(0, Math.floor(Number(minutes) || 0));
+  const h = Math.floor(total / 60);
+  const m = total % 60;
+  const mins = `${m}${m === 1 ? "min" : "mins"}`;
+  if (h === 0) return mins;
+  return m ? `${h}hr ${mins}` : `${h}hr`;
+}
+
+// Small "Today's call time" card above Start a practice (design from the
+// daily call time mock). Real numbers from GET /api/group/usage.
+function DailyCallTime({ usage }) {
+  if (!usage?.loaded) return null;
+  const unlimited = usage.total === null;
+  const total = Number(usage.total) || 0;
+  const left = unlimited ? null : Math.max(0, Number(usage.left) || 0);
+  const usedUp = !unlimited && left === 0;
+  const low = !unlimited && !usedUp && left <= 15;
+  const share = unlimited ? 1 : total > 0 ? left / total : 0;
+  const R = 15;
+  const C = 2 * Math.PI * R;
+  return (
+    <div
+      className={`dct ${usedUp ? "is-out" : ""} ${low ? "is-low" : ""}`}
+      role="status"
+    >
+      <span className="dct-ring" aria-hidden="true">
+        <svg className="dct-ring-svg" viewBox="0 0 36 36">
+          <circle className="dct-track" cx="18" cy="18" r={R} />
+          <circle
+            className="dct-fill"
+            cx="18"
+            cy="18"
+            r={R}
+            strokeDasharray={C}
+            strokeDashoffset={C * (1 - share)}
+          />
+        </svg>
+        {unlimited ? <InfinityIcon size={13} /> : <Clock size={13} />}
+      </span>
+      <span className="dct-text">
+        <span className="dct-label">
+          Today&apos;s call time
+          {!unlimited && ` · ${formatCallTime(total)} a day`}
+        </span>
+        <strong className="dct-value">
+          {unlimited
+            ? `Unlimited · ${formatCallTime(usage.usedToday || 0)} used today`
+            : usedUp
+              ? "All used for today. It resets at midnight."
+              : `You have ${formatCallTime(left)} left for calls today`}
+        </strong>
+      </span>
+    </div>
+  );
+}
+
+// Today's call time as a ring beside the practice picker: "1h / 30m" inside,
+// "Call time left" and an info button underneath. The ring shows the share
+// of today's time that is left.
+// "CALL TIME LEFT" beside the practice option, in the same style as the
+// Solo tab's "FEEDBACK  11 left" (Sheriff, round 10). Real numbers from
+// GET /api/group/usage. Tapping it shows the details underneath.
+function CallTimeMeter({ usage, infoOpen, onToggleInfo }) {
+  if (!usage?.loaded) return null;
+  const unlimited = usage.total === null;
+  const left = unlimited
+    ? null
+    : Math.max(0, Math.floor(Number(usage.left) || 0));
+  const usedUp = !unlimited && left === 0;
+  return (
+    // Round 13 (Sheriff's reference): a clock and the time on top, then
+    // "Call time left" with an info icon underneath.
+    <div className={`gpt-time-left ${usedUp ? "is-empty" : ""}`}>
+      <button
+        type="button"
+        className="gpt-time-left-box"
+        onClick={onToggleInfo}
+        aria-expanded={infoOpen}
+        aria-label={
+          unlimited
+            ? "Unlimited call time"
+            : `${formatCallTime(left)} call time left today`
+        }
+      >
+        <span className="gpt-time-left-value">
+          {unlimited ? (
+            <InfinityIcon size={17} strokeWidth={2} aria-hidden="true" />
+          ) : (
+            <Clock size={17} strokeWidth={2} aria-hidden="true" />
+          )}
+          {unlimited ? "Unlimited" : formatCallTime(left)}
+        </span>
+        <span className="gpt-time-left-label">
+          Call time left
+          <Info size={14} strokeWidth={2} aria-hidden="true" />
+        </span>
+      </button>
+    </div>
+  );
+}
+
+function callTimeDetail(usage) {
+  if (!usage?.loaded) return "";
+  if (usage.total === null)
+    return `Infinity has unlimited call time. ${formatCallTime(usage.usedToday || 0)} used today.`;
+  return `Your plan gives you ${formatCallTime(usage.total)} of call time a day. ${formatCallTime(Number(usage.usedToday) || 0)} used today. It resets at midnight.`;
+}
+
+// "Practice option" picker, built like the Solo tab's level picker.
+function PracticeOptionPicker({ value, onChange, disabled }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    if (!open) return undefined;
+    const close = (e) => {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener("pointerdown", close);
+    return () => document.removeEventListener("pointerdown", close);
+  }, [open]);
+  const chosen = PRACTICE_OPTIONS.find((o) => o.id === value);
+  return (
+    <div className="level-dropdown" ref={ref}>
+      <button
+        type="button"
+        className={`level-dropdown-trigger ${open ? "open" : ""}`}
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        aria-haspopup="listbox"
+        tabIndex={disabled ? -1 : undefined}
+      >
+        <span className="level-dropdown-trigger-text">
+          {/* Round 11 (Sheriff): no "OPTION" label, just the choice. */}
+          <span className="level-dropdown-title">
+            {chosen?.label || "Choose how you want to practise"}
+          </span>
+        </span>
+        <ChevronDown
+          size={20}
+          strokeWidth={2}
+          className={`level-dropdown-chevron ${open ? "open" : ""}`}
+        />
+      </button>
+      {open && (
+        <div className="level-dropdown-list" role="listbox">
+          {PRACTICE_OPTIONS.map((o, i) => (
+            <button
+              key={o.id}
+              type="button"
+              role="option"
+              aria-selected={value === o.id}
+              className={`level-dropdown-item ${value === o.id ? "selected" : ""}`}
+              onClick={() => {
+                onChange(o.id);
+                setOpen(false);
+              }}
+            >
+              <span className="level-dropdown-item-number">
+                {String(i + 1).padStart(2, "0")}
+              </span>
+              <span className="level-dropdown-item-text">
+                <span className="level-dropdown-item-title">{o.label}</span>
+              </span>
+              {value === o.id && (
+                <Check
+                  size={16}
+                  strokeWidth={2.5}
+                  className="level-dropdown-item-check"
+                />
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// What members without group practice (Free, Bloom) see.
+export function GroupPracticeIntro() {
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (hasGroupPractice()) navigate(LOBBY, { replace: true });
+  }, [navigate]);
+
+  const planNames = groupPracticePlanNames()
+    .map((name) => `Loquiex ${name}`)
+    .join(" or ");
+
+  return (
+    <div className="page gpc-page">
+      <button
+        className="gpc-back"
+        onClick={() => navigate("/app/practice?tab=group")}
+      >
+        <ArrowLeft size={16} /> Back to Practice
+      </button>
+
+      <p className="gpc-eyebrow">Group practice</p>
+      <h1 className="gpc-title">Your voice belongs in the room.</h1>
+      <p className="gpc-sub">
+        Get comfortable expressing yourself in real conversations.
+      </p>
+
+      <div className="gpc-card">
+        <div className="gpc-hero">
+          <span className="gpc-hero-icon" aria-hidden="true">
+            <Users size={22} />
+          </span>
+          <span>
+            <strong>Live group practice</strong>
+            <span>Speak · Listen · Grow</span>
+          </span>
+          <LockKeyhole size={18} className="gpc-lock" aria-label="Locked" />
+        </div>
+
+        <ul className="gpc-list">
+          <li>
+            <MessagesSquare size={22} aria-hidden="true" />
+            <span>
+              <strong>Join live practice sessions</strong>
+              <span>
+                Meet other learners and practise expressing your thoughts in
+                real conversations.
+              </span>
+            </span>
+          </li>
+          <li>
+            <AudioLines size={22} aria-hidden="true" />
+            <span>
+              <strong>Build confidence speaking aloud</strong>
+              <span>
+                Get more comfortable sharing ideas, responding to others and
+                thinking on your feet.
+              </span>
+            </span>
+          </li>
+          <li>
+            <CalendarClock size={22} aria-hidden="true" />
+            <span>
+              <strong>Practise on your schedule</strong>
+              <span>
+                Join a public practice or start your own when you&apos;re ready.
+              </span>
+            </span>
+          </li>
+        </ul>
+      </div>
+
+      <p className="gpc-sub" style={{ marginTop: 8 }}>
+        <Sprout
+          size={16}
+          aria-hidden="true"
+          style={{ verticalAlign: "-3px", marginRight: 6 }}
+        />
+        Group practice comes with {planNames}.
+      </p>
+
+      <button
+        className="gpc-primary"
+        onClick={() =>
+          navigate("/app/membership", { state: { reason: "group" } })
+        }
+      >
+        Explore membership
+      </button>
+      <button
+        className="gpc-link gpc-center"
+        onClick={() => navigate("/app/practice")}
+      >
+        I&apos;ll keep practising on my own for now
+      </button>
+    </div>
+  );
+}
+
+function TimeUp({ onBack }) {
+  return (
+    <div className="page gpc-page">
+      <div className="gpc-ended">
+        <span className="gpc-ended-icon" aria-hidden="true">
+          <ClockAlert size={28} />
+        </span>
+        <h1 className="gpc-title">Your call time is up for today</h1>
+        <p className="gpc-sub">
+          You&apos;ve used all of today&apos;s group call time.
+        </p>
+        <div className="gpc-card">
+          <p>
+            <RefreshCw size={18} aria-hidden="true" /> Your call time resets at
+            midnight
+          </p>
+          <span>
+            Come back tomorrow, or schedule a practice for tomorrow from Group
+            Practice.
+          </span>
+        </div>
+        <button className="gpc-primary" onClick={onBack}>
+          Back to Practice
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function Elapsed({ since }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+  const secs = Math.max(0, Math.floor((now - since) / 1000));
+  const m = Math.floor(secs / 60);
+  const s = String(secs % 60).padStart(2, "0");
+  return (
+    <>
+      {m}:{s}
+    </>
+  );
+}
+
+const END_COPY = {
+  full: "This room is full.",
+  gone: "This room has closed.",
+  "bad-code": "That code doesn't look right.",
+  "no-code": "No live call has that code.",
+  "slow-down": "Too many wrong codes.",
+  "joined-elsewhere": "You joined group practice on another device or tab.",
+  "signed-out": "Please sign in again to join group practice.",
+  timeout: "We couldn't reach the server.",
+  error: "Something went wrong.",
+};
+
+// "Nearly full": one seat left, or three quarters of the seats taken.
+function seatsLeft(room) {
+  return Math.max(0, room.max - room.members.length);
+}
+function isNearlyFull(room) {
+  const left = seatsLeft(room);
+  return left > 0 && (left === 1 || room.members.length / room.max >= 0.75);
+}
+
+// Round 13 (Sheriff): tabs in Find a practice. Team only for team members.
+// Round 14 (Sheriff): Live comes before Upcoming.
+const LIST_TABS = [
+  { id: "all", label: "All" },
+  { id: "live", label: "Live" },
+  { id: "upcoming", label: "Upcoming" },
+  { id: "team", label: "Team" },
+];
+
+// Round 14 (Sheriff): what the person who started a team call (or anyone
+// already in it) sees on its card. Tapping it takes them back into the call
+// instead of joining again, which used to end the call.
+const BACK_TO_CALL_LABEL = "Continue call";
+
+// "Sat 8 Nov, 6:00 pm" in each member's own time zone (the practice is
+// saved as one moment in time, so everyone sees their local clock).
+// "Practice option" picker on the Group tab; Continue opens the page.
+const PRACTICE_OPTIONS = [
+  { id: "start", label: "Start a practice" },
+  { id: "join", label: "Join with a private code" },
+  // Round 10 (Sheriff): team members practise together in a private room.
+  { id: "team", label: "Practice as a team" },
+];
+
+// Rooms shown under "Find a practice" before "View all".
+const ROOMS_PREVIEW = 3;
+
+function formatWhen(iso) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const today = new Date();
+  const tomorrow = new Date();
+  tomorrow.setDate(today.getDate() + 1);
+  const time = formatTime12(d);
+  if (d.toDateString() === today.toDateString()) return `Today, ${time}`;
+  if (d.toDateString() === tomorrow.toDateString()) return `Tomorrow, ${time}`;
+  return `${d.toLocaleDateString(undefined, {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+  })}, ${time}`;
+}
+
+// Live room card (Example 1 / Example 2): the host's own topic, or the
+// Loquiex prompt with its category underneath.
+function RoomCard({ room, onJoin }) {
+  const full = seatsLeft(room) === 0;
+  return (
+    <article className="gpt-room">
+      <div className="gpt-room-top">
+        <span className="gpt-badge">
+          <span className="gpc-live-dot" aria-hidden="true" /> Live · Public
+        </span>
+        <span className="gpt-seats">
+          {room.unlimited
+            ? `${room.members.length} joined · Unlimited`
+            : `${room.members.length}/${room.max} seats filled`}
+        </span>
+      </div>
+      <h4 className="gpt-room-title">{roomTitle(room)}</h4>
+      <p className="gpt-room-meta">{roomMeta(room)}</p>
+      {/* Round 13 (Sheriff): a small seat status line on each live call. */}
+      {(() => {
+        const near = !full && !room.unlimited && isNearlyFull(room);
+        return (
+          <p className={`gpt-room-status ${full ? "is-full" : near ? "is-near" : ""}`}>
+            {full ? "Full" : near ? "Nearly full" : "Open seats"}
+          </p>
+        );
+      })()}
+      <div className="gpt-room-foot">
+        <button
+          type="button"
+          className="gpt-room-join"
+          disabled={full}
+          onClick={() => onJoin(room)}
+        >
+          <Users size={16} aria-hidden="true" />
+          {full
+            ? "Full right now"
+            : room.mode === "host"
+              ? "Join this discussion"
+              : "Join this practice"}
+        </button>
+        <span className="gpt-room-host">Host: {room.hostName || "Member"}</span>
+      </div>
+    </article>
+  );
+}
+
+// A practice planned for later.
+function PlannedCard({ item, onRemind, onStart, onCancel, onJoin, busy, now = 0, inCall = false }) {
+  return (
+    <article className="gpt-room gpt-planned">
+      <div className="gpt-room-top">
+        {item.isTeam && item.liveRoomId ? (
+          <span className="gpt-badge">
+            <span className="gpc-live-dot" aria-hidden="true" /> Team Call live
+          </span>
+        ) : (
+          <span className="gpt-badge gpt-badge-soon">
+            <CalendarDays size={13} aria-hidden="true" />
+            {formatWhen(item.startsAt)}
+          </span>
+        )}
+        <span className="gpt-seats">
+          {item.isTeam ? "Team" : item.private ? "Private" : "Public"} ·{" "}
+          {item.unlimited || !item.max
+            ? "Unlimited seats"
+            : `${item.max} seats`}
+        </span>
+      </div>
+      <h4 className="gpt-room-title">{roomTitle(item)}</h4>
+      <p className="gpt-room-meta">
+        {roomMeta(item)}
+        {item.isHost ? "" : ` · Host: ${item.hostName || "Member"}`}
+      </p>
+      {item.isHost ? (
+        <>
+          <p className="gpt-planned-code">
+            Invite code <strong>{spacedCode(item.code)}</strong>
+            {item.reminderCount > 0 &&
+              ` · ${item.reminderCount} ${item.reminderCount === 1 ? "person" : "people"} will be reminded`}
+          </p>
+          <div className="gpt-planned-actions">
+            <button
+              type="button"
+              className="gpt-join"
+              onClick={() => onStart(item)}
+            >
+              {item.liveRoomId ? "Return to call" : "Start now"}
+            </button>
+            {!item.liveRoomId && (
+              <button
+                type="button"
+                className="gpt-text-button"
+                disabled={busy}
+                onClick={() => onCancel(item)}
+              >
+                Cancel
+              </button>
+            )}
+          </div>
+        </>
+      ) : (
+        <div className="gpt-room-foot">
+          {/* Round 11: a team practice that has started can be joined here. */}
+          {item.liveRoomId && onJoin ? (
+            <button type="button" className="gpt-room-join" onClick={() => onJoin(item)}>
+              <Users size={16} aria-hidden="true" />
+              {inCall ? BACK_TO_CALL_LABEL : "Join now"}
+            </button>
+          ) : !item.liveRoomId && new Date(item.startsAt).getTime() <= now ? (
+            /* Round 13 (Sheriff): past the start time and not started yet.
+               Only the host can start it; it's never cancelled for them. */
+            <button type="button" className="gpt-room-join gpt-waiting" disabled>
+              <Clock size={16} aria-hidden="true" />
+              Waiting for host to start
+            </button>
+          ) : (
+          <button
+            type="button"
+            className="gpt-room-join"
+            aria-pressed={item.reminded}
+            disabled={busy}
+            onClick={() => onRemind(item)}
+          >
+            {item.reminded ? (
+              <BellRing size={16} aria-hidden="true" />
+            ) : (
+              <Bell size={16} aria-hidden="true" />
+            )}
+            {item.reminded ? "Reminder set" : "Remind me"}
+          </button>
+          )}
+        </div>
+      )}
+    </article>
+  );
+}
+
+// Practice > Group Practice. Live public rooms from the server, practices
+// planned for later, and the member's own planned practices. Joining needs
+// Flourish or Infinity (others are shown the membership page).
+export function GroupPracticeTab() {
+  const navigate = useNavigate();
+  const allowed = hasGroupPractice();
+  const [usage] = useGroupUsage();
+  const usedUpToday =
+    allowed && usage.loaded && usage.total !== null && usage.left <= 0;
+  const [rooms, setRooms] = useState([]);
+  const [connection, setConnection] = useState("connecting");
+  const [listTab, setListTab] = useState("all"); // all | live | upcoming | team
+  const activeCallSnap = useActiveCall();
+  // Round 13: the clock for "Waiting for host to start" (checked every 15s).
+  const [clockNow, setClockNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setClockNow(Date.now()), 15 * 1000);
+    return () => clearInterval(t);
+  }, []);
+  const [planned, setPlanned] = useState({ upcoming: [], mine: [], team: [] });
+  const [busyId, setBusyId] = useState(null);
+  const [option, setOption] = useState("");
+  const [timeInfoOpen, setTimeInfoOpen] = useState(false);
+  // Round 10: the member's team, for "Practice as a team".
+  const [myTeam, setMyTeam] = useState(null);
+  useEffect(() => {
+    let alive = true;
+    getMyTeam()
+      .then((t) => alive && setMyTeam(t))
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
+  const [showAllRooms, setShowAllRooms] = useState(false);
+
+  useEffect(() => watchRooms(setRooms, setConnection), []);
+
+  // Planned practices: on open, every minute, and when the live list
+  // changes (a planned practice may just have started).
+  const roomsKey = rooms.map((r) => r.id).join(",");
+  useEffect(() => {
+    let alive = true;
+    const load = () =>
+      fetchScheduled().then((data) => {
+        if (alive && data) setPlanned(data);
+      });
+    const first = setTimeout(load, roomsKey ? 600 : 0);
+    const timer = setInterval(load, 60 * 1000);
+    return () => {
+      alive = false;
+      clearTimeout(first);
+      clearInterval(timer);
+    };
+  }, [roomsKey]);
+
+  const teamPlanned = planned.team || [];
+  const upcoming = planned.upcoming.filter(
+    (item) => !item.isHost && !item.liveRoomId,
+  );
+
+  const locked = () => navigate("/app/group-practice");
+  const joinRoom = (room) =>
+    allowed
+      ? navigate(`${CALL}/${room.id}`, {
+          state: {
+            autoJoin: true,
+            preview: {
+              title: roomTitle(room),
+              meta: roomMeta(room),
+              hostName: room.hostName,
+              private: room.private,
+            },
+          },
+        })
+      : locked();
+
+  const [reminderNote, setReminderNote] = useState("");
+  const remind = async (item) => {
+    if (!allowed) return locked();
+    setBusyId(item.id);
+    // Ask for notifications from this tap, so the reminder can reach the
+    // phone even when Loquiex is closed.
+    const pushState = item.reminded
+      ? "on"
+      : await ensureReminderNotifications();
+    const updated = await setReminder(item.id, !item.reminded);
+    setBusyId(null);
+    if (updated) {
+      setPlanned((p) => ({
+        ...p,
+        upcoming: p.upcoming.map((x) => (x.id === updated.id ? updated : x)),
+        team: (p.team || []).map((x) => (x.id === updated.id ? updated : x)),
+      }));
+      plannedChanged();
+      setReminderNote(updated.reminded ? reminderHelp(pushState) : "");
+    }
+  };
+
+  const startPlanned = (item) =>
+    navigate(item.liveRoomId ? `${CALL}/${item.liveRoomId}` : `${CALL}/new`, {
+      state: item.liveRoomId
+        ? { preview: { title: roomTitle(item), meta: roomMeta(item) } }
+        : {
+            create: { scheduledId: item.id },
+            preview: {
+              title: roomTitle(item),
+              meta: roomMeta(item),
+              private: item.private,
+            },
+          },
+    });
+
+  const cancelPlanned = async (item) => {
+    if (!window.confirm("Cancel this planned practice?")) return;
+    setBusyId(item.id);
+    const ok = await cancelScheduled(item.id);
+    setBusyId(null);
+    if (ok) {
+      setPlanned((p) => ({
+        ...p,
+        upcoming: p.upcoming.filter((x) => x.id !== item.id),
+        mine: p.mine.filter((x) => x.id !== item.id),
+      }));
+      plannedChanged();
+    }
+  };
+
+  const goToOption = () => {
+    if (option === "start") return allowed ? navigate(START) : locked();
+    if (option === "join") navigate(JOIN);
+    if (option === "team") {
+      // Not in a team yet: show the team plans.
+      if (!myTeam || !myTeam.active)
+        return navigate("/app/membership", { state: { reason: "team" } });
+      // The team is already practising: join them.
+      if (myTeam.liveRoom) return navigate(`${JOIN}/${myTeam.liveRoom.code}`);
+      return allowed ? navigate(START, { state: { team: true } }) : locked();
+    }
+  };
+
+  // Round 13: lists shown in the Find a practice tabs.
+  const inTeam = Boolean(myTeam?.active);
+  const showTeamLive = Boolean(
+    myTeam?.liveRoom && !teamPlanned.some((x) => x.liveRoomId),
+  );
+  const teamCount = teamPlanned.length + (showTeamLive ? 1 : 0);
+  // Round 14: already in this team call (or started it)? Go back into it.
+  const activeRoomId = activeCallSnap?.status !== "ended" ? activeCallSnap?.room?.id : "";
+  const backToTeamCall = Boolean(
+    myTeam?.liveRoom?.id &&
+      (myTeam.liveRoom.isStarter ||
+        myTeam.liveRoom.isInCall ||
+        activeRoomId === myTeam.liveRoom.id),
+  );
+  const teamList = (
+    <div className="gpt-rooms">
+      {showTeamLive && (
+        <article className="gpt-room">
+          <div className="gpt-room-top">
+            <span className="gpt-badge">
+              <span className="gpc-live-dot" aria-hidden="true" /> Team Call live
+            </span>
+          </div>
+          <h4 className="gpt-room-title">Your team is practising now</h4>
+          <p className="gpt-room-meta">
+            {myTeam.liveRoom.hostName
+              ? `${myTeam.liveRoom.hostName} started it.`
+              : "A team member started it."}
+          </p>
+          <div className="gpt-room-foot">
+            <button
+              type="button"
+              className="gpt-room-join"
+              onClick={() => {
+                if (!allowed) return locked();
+                if (backToTeamCall) return navigate(`${CALL}/${myTeam.liveRoom.id}`);
+                return navigate(`${JOIN}/${myTeam.liveRoom.code}`);
+              }}
+            >
+              <Users size={16} aria-hidden="true" />
+              {backToTeamCall ? BACK_TO_CALL_LABEL : "Join now"}
+            </button>
+          </div>
+        </article>
+      )}
+      {teamPlanned.map((item) => (
+        <PlannedCard
+          key={item.id}
+          item={item}
+          busy={busyId === item.id}
+          now={clockNow}
+          onRemind={remind}
+          onJoin={(it) => {
+            if (!allowed) return locked();
+            // Round 14: already in this call? Go back into it.
+            if (it.liveRoomId && activeRoomId === it.liveRoomId)
+              return navigate(`${CALL}/${it.liveRoomId}`);
+            return navigate(`${JOIN}/${it.code}`);
+          }}
+          inCall={Boolean(item.liveRoomId && activeRoomId === item.liveRoomId)}
+        />
+      ))}
+    </div>
+  );
+  // Round 14: the host's own started private practice isn't in the public
+  // live list, so it shows here (with Return to call) while it's live.
+  const mineLivePrivate = planned.mine.filter(
+    (item) =>
+      item.liveRoomId &&
+      !item.isTeam &&
+      item.private &&
+      !rooms.some((r) => r.id === item.liveRoomId),
+  );
+  const liveCount = rooms.length + mineLivePrivate.length;
+  const liveList = (
+    <div className="gpt-rooms">
+      {mineLivePrivate.map((item) => (
+        <PlannedCard
+          key={item.id}
+          item={item}
+          busy={busyId === item.id}
+          onStart={startPlanned}
+          onCancel={cancelPlanned}
+        />
+      ))}
+      {(showAllRooms ? rooms : rooms.slice(0, ROOMS_PREVIEW)).map((room) => (
+        <RoomCard key={room.id} room={room} onJoin={joinRoom} />
+      ))}
+    </div>
+  );
+  // Round 13 (Sheriff): your own planned practices sit first in Upcoming
+  // (with Start now), then other people's.
+  // Round 14 (Sheriff): a planned practice that has started shows under Live
+  // only (never Upcoming), and is gone once the call ends.
+  const mineUpcoming = planned.mine.filter((item) => !item.liveRoomId);
+  const upcomingCount = mineUpcoming.length + upcoming.length;
+  const upcomingList = (
+    <div className="gpt-rooms">
+      {mineUpcoming.map((item) => (
+        <PlannedCard
+          key={item.id}
+          item={item}
+          busy={busyId === item.id}
+          onStart={startPlanned}
+          onCancel={cancelPlanned}
+        />
+      ))}
+      {upcoming.map((item) => (
+        <PlannedCard
+          key={item.id}
+          item={item}
+          busy={busyId === item.id}
+          now={clockNow}
+          onRemind={remind}
+        />
+      ))}
+    </div>
+  );
+  const connectionNote = (
+    <div className="gpc-empty">
+      <span className="gpc-status">
+        {connection === "signed-out" ? (
+          <>
+            <WifiOff size={16} /> Please sign in again to see live practices.
+          </>
+        ) : (
+          <>
+            <LoaderCircle size={16} className="gpc-spin" /> Finding live
+            practices. This can take up to a minute the first time.
+          </>
+        )}
+      </span>
+    </div>
+  );
+
+  const lobby = (
+    <div className="gpt" aria-hidden={allowed ? undefined : true}>
+      <div className="practice-panel-intro gpt-intro">
+        <h2 className="practice-panel-title">Practice Together</h2>
+        <p className="practice-panel-sub">
+          Get comfortable expressing your thoughts with others.
+        </p>
+      </div>
+
+      <div className="gpt-choose-row practice-level-row has-ai">
+        <div className="practice-level-col">
+          <p className="eyebrow practice-level-label">PRACTICE OPTION</p>
+          <PracticeOptionPicker
+            value={option}
+            onChange={setOption}
+            disabled={!allowed}
+          />
+        </div>
+        {allowed && (
+          <CallTimeMeter
+            usage={usage}
+            infoOpen={timeInfoOpen}
+            onToggleInfo={() => setTimeInfoOpen((v) => !v)}
+          />
+        )}
+      </div>
+      {allowed && timeInfoOpen && (
+        <p className="ai-meter-info gpt-time-info">{callTimeDetail(usage)}</p>
+      )}
+
+      <div className="gpt-voices">
+        {/* Sheriff's illustration (round 10), in place of Jasmine and David. */}
+        <img
+          className="gpt-voices-art"
+          src={groupTogetherArt}
+          alt=""
+          aria-hidden="true"
+          width="1000"
+          height="471"
+          loading="lazy"
+          decoding="async"
+        />
+        {option === "start" && usedUpToday && (
+          <p className="gpt-choose-note">
+            You&apos;ve used today&apos;s call time. You can still schedule a
+            practice for tomorrow.
+          </p>
+        )}
+        <button
+          type="button"
+          className="gpt-continue"
+          onClick={goToOption}
+          disabled={!option}
+          tabIndex={allowed ? undefined : -1}
+        >
+          <span>Continue</span>
+          <ArrowRight size={18} aria-hidden="true" />
+        </button>
+      </div>
+
+      {/* Round 13 (Sheriff): "Find a practice" with All / Upcoming / Live /
+          Team tabs (Team only for team members). All lists team calls first,
+          then live calls, then upcoming. The All / Open seats / Nearly full
+          buttons are gone; each live call says "Nearly full", "Open seats" or
+          "Full" instead. */}
+      <section aria-labelledby="gpt-find-title" className="gpt-section gpt-find-card">
+        <div className="gpt-find-head">
+          <div>
+            <h3 className="gpt-section-title" id="gpt-find-title">
+              Find a practice
+            </h3>
+            <p className="gpt-section-sub">
+              Join a session and practise with others.
+            </p>
+          </div>
+          {(listTab === "all" || listTab === "live") &&
+            rooms.length > ROOMS_PREVIEW && (
+              <button
+                type="button"
+                className="gpt-view-all"
+                aria-expanded={showAllRooms}
+                onClick={() => setShowAllRooms((v) => !v)}
+                tabIndex={allowed ? undefined : -1}
+              >
+                {showAllRooms ? "Show less" : "View all"}
+              </button>
+            )}
+        </div>
+
+        <div
+          className={`gpt-list-tabs ${inTeam ? "has-4" : "has-3"}`}
+          role="tablist"
+          aria-label="Practices"
+        >
+          {LIST_TABS.filter((t) => inTeam || t.id !== "team").map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              role="tab"
+              aria-selected={listTab === t.id}
+              className={`pf-tab ${listTab === t.id ? "is-active" : ""}`}
+              onClick={() => setListTab(t.id)}
+              tabIndex={allowed ? undefined : -1}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        {reminderNote && (listTab === "all" || listTab === "upcoming" || listTab === "team") && (
+          <p className="gpt-reminder-note" role="status">
+            <Bell size={14} aria-hidden="true" /> {reminderNote}
+          </p>
+        )}
+
+        <div className="gpt-list-panel" role="tabpanel">
+          {listTab === "all" && (
+            <>
+              {inTeam && teamCount > 0 && (
+                <>
+                  <p className="gpt-list-group">Team calls</p>
+                  {teamList}
+                </>
+              )}
+              {connection !== "connected" ? (
+                connectionNote
+              ) : (
+                liveCount > 0 && (
+                  <>
+                    <p className="gpt-list-group">Live calls</p>
+                    {liveList}
+                  </>
+                )
+              )}
+              {upcomingCount > 0 && (
+                <>
+                  <p className="gpt-list-group">Upcoming</p>
+                  {upcomingList}
+                </>
+              )}
+              {connection === "connected" &&
+                liveCount === 0 &&
+                upcomingCount === 0 &&
+                !(inTeam && teamCount > 0) && (
+                  <div className="gpc-empty gpt-empty">
+                    <span className="gpt-empty-icon" aria-hidden="true">
+                      <Users size={20} />
+                    </span>
+                    <strong>No sessions available right now</strong>
+                    <span>Why not start one? Others can join when you&apos;re ready.</span>
+                    <button
+                      type="button"
+                      className="gpt-empty-start"
+                      onClick={() => (allowed ? navigate(START) : locked())}
+                      tabIndex={allowed ? undefined : -1}
+                    >
+                      Start a practice <ArrowRight size={15} aria-hidden="true" />
+                    </button>
+                  </div>
+                )}
+            </>
+          )}
+
+          {listTab === "live" &&
+            (connection !== "connected" ? (
+              connectionNote
+            ) : liveCount > 0 ? (
+              liveList
+            ) : (
+              <div className="gpc-empty gpt-empty">
+                <span className="gpt-empty-icon" aria-hidden="true">
+                  <Users size={20} />
+                </span>
+                <strong>No sessions available right now</strong>
+                <span>Why not start one? Others can join when you&apos;re ready.</span>
+                <button
+                  type="button"
+                  className="gpt-empty-start"
+                  onClick={() => (allowed ? navigate(START) : locked())}
+                  tabIndex={allowed ? undefined : -1}
+                >
+                  Start a practice <ArrowRight size={15} aria-hidden="true" />
+                </button>
+              </div>
+            ))}
+
+          {listTab === "upcoming" &&
+            (upcomingCount > 0 ? (
+              upcomingList
+            ) : (
+              <div className="gpc-empty gpt-empty">
+                <span className="gpt-empty-icon" aria-hidden="true">
+                  <CalendarDays size={20} />
+                </span>
+                <strong>No upcoming practices yet</strong>
+                <button
+                  type="button"
+                  className="gpt-empty-start"
+                  onClick={() => (allowed ? navigate(START) : locked())}
+                  tabIndex={allowed ? undefined : -1}
+                >
+                  Create a practice <ArrowRight size={15} aria-hidden="true" />
+                </button>
+              </div>
+            ))}
+
+          {listTab === "team" &&
+            inTeam &&
+            (teamCount > 0 ? (
+              teamList
+            ) : (
+              <div className="gpc-empty gpt-empty">
+                <span className="gpt-empty-icon" aria-hidden="true">
+                  <Users size={20} />
+                </span>
+                <strong>No team practices yet</strong>
+                <button
+                  type="button"
+                  className="gpt-empty-start"
+                  onClick={() =>
+                    allowed ? navigate(START, { state: { team: true } }) : locked()
+                  }
+                  tabIndex={allowed ? undefined : -1}
+                >
+                  Create a team practice <ArrowRight size={15} aria-hidden="true" />
+                </button>
+              </div>
+            ))}
+        </div>
+      </section>
+    </div>
+  );
+
+  if (allowed) return lobby;
+
+  // Free and Bloom: the page is shown blurred behind an upgrade card.
+  return (
+    <div className="gpt-locked">
+      <div className="gpt-locked-content" inert>
+        {lobby}
+      </div>
+      <div className="gpt-locked-overlay">
+        <div
+          className="gpt-locked-card"
+          role="dialog"
+          aria-labelledby="gpt-locked-title"
+        >
+          <span className="gpt-locked-icon" aria-hidden="true">
+            <LockKeyhole size={20} />
+          </span>
+          <h3 className="gpt-locked-title" id="gpt-locked-title">
+            Upgrade your plan to practise with others
+          </h3>
+          <p className="gpt-locked-text">
+            Group practice comes with{" "}
+            {groupPracticePlanNames()
+              .map((n) => `Loquiex ${n}`)
+              .join(" or ")}
+            .
+          </p>
+          <button
+            type="button"
+            className="gpt-locked-button"
+            onClick={() =>
+              navigate("/app/membership", { state: { reason: "group" } })
+            }
+          >
+            Upgrade your plan
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Old lobby address: the lobby now lives on the Practice tab.
+export function GroupPracticeRoom() {
+  return <Navigate to={LOBBY} replace />;
+}
+
+// "2026-11-08" for a date input, in local time.
+function dateInputValue(d) {
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+function defaultPlanDate() {
+  const d = new Date();
+  if (d.getHours() >= 17) d.setDate(d.getDate() + 1);
+  return dateInputValue(d);
+}
+
+const MAX_PLAN_DAYS = 30;
+
+// Start a practice: host your own topic or practise with Loquiex, who can
+// join, seats, and now or later.
+export function GroupPracticeStart() {
+  const navigate = useNavigate();
+  const startLocation = useLocation();
+  // "Practice as a team" (round 10): a private room for the member's team;
+  // everyone else in the team is told it has started.
+  const teamMode = startLocation.state?.team === true;
+  const [usage] = useGroupUsage();
+  const [mode, setMode] = useState("host"); // host | guided
+  const [topic, setTopic] = useState("");
+  const [categoryId, setCategoryId] = useState(CATEGORIES[0].id);
+  const [prompt, setPrompt] = useState(() => getRandomPrompt(CATEGORIES[0].id));
+  const [ownPrompt, setOwnPrompt] = useState("");
+  const [isPrivate, setIsPrivate] = useState(teamMode);
+  // Seats the host's plan allows: Bloom 2, Flourish up to 6 (round 10).
+  const seatCap = maxHostSeats() ?? 6;
+  const seatChoices = SEAT_CHOICES.filter((n) => n <= seatCap);
+  const [seats, setSeats] = useState(Math.min(4, seatCap)); // 2-6 or "unlimited"
+  const [when, setWhen] = useState("now"); // now | later
+  const [planDate, setPlanDate] = useState(defaultPlanDate);
+  const [planHour, setPlanHour] = useState("6");
+  const [planMinute, setPlanMinute] = useState("00");
+  const [planAmPm, setPlanAmPm] = useState("pm");
+  const [pushState, setPushState] = useState("");
+  const unlimitedSeats = canHostUnlimited();
+  const [showUnlimitedUpsell, setShowUnlimitedUpsell] = useState(false);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [planned, setPlanned] = useState(null);
+
+  useEffect(() => {
+    if (!hasGroupPractice()) navigate("/app/group-practice", { replace: true });
+  }, [navigate]);
+
+  const category = categoryOf(categoryId);
+  const pickCategory = (id) => {
+    setCategoryId(id);
+    setPrompt(getRandomPrompt(id));
+  };
+
+  if (usage.loaded && usage.total === 0) {
+    return <Navigate to="/app/group-practice" replace />;
+  }
+  // Today's call time used up: they can still plan one for later.
+  const usedUpToday = usage.loaded && usage.left !== null && usage.left <= 0;
+  const whenNow = usedUpToday ? "later" : when;
+
+  const details = () => {
+    const firstPrompt =
+      mode === "host" ? topic.trim() : ownPrompt.trim() || prompt || "";
+    return {
+      mode,
+      topic: mode === "host" ? topic.trim() : "",
+      categoryId,
+      categoryTitle: category?.title || "Open conversation",
+      prompt: firstPrompt,
+      private: teamMode || isPrivate,
+      max: seats,
+      ...(teamMode ? { team: true } : {}),
+    };
+  };
+
+  // "Start now" starts the practice straight away (it used to only select
+  // "now", so tapping it looked like nothing happened). "Schedule for later"
+  // opens the date and time fields as before.
+  const submit = async (e, whenOverride) => {
+    e?.preventDefault?.();
+    const whenNow = whenOverride || (usedUpToday ? "later" : when);
+    setError("");
+    if (mode === "host" && !topic.trim()) {
+      setError("Type the topic you'd like to discuss.");
+      return;
+    }
+    const create = details();
+    if (whenNow === "now") {
+      navigate(`${CALL}/new`, {
+        state: {
+          create,
+          preview: {
+            title: roomTitle(create),
+            meta: roomMeta(create),
+            private: isPrivate,
+          },
+        },
+      });
+      return;
+    }
+    const planTime = `${String(to24h(planHour, planAmPm)).padStart(2, "0")}:${planMinute}`;
+    const startsAt = new Date(`${planDate}T${planTime}`);
+    if (!planDate || Number.isNaN(startsAt.getTime())) {
+      setError("Choose a date and a start time.");
+      return;
+    }
+    if (startsAt.getTime() < Date.now() + 60 * 1000) {
+      setError("Pick a time later than now.");
+      return;
+    }
+    setBusy(true);
+    // Asked from this tap so the 5-minute reminder can reach the phone.
+    setPushState(await ensureReminderNotifications());
+    const result = await schedulePractice({
+      ...create,
+      startsAt: startsAt.toISOString(),
+    });
+    setBusy(false);
+    if (result.ok) {
+      setPlanned(result.scheduled);
+      plannedChanged();
+    } else setError(result.message);
+  };
+
+  if (planned) {
+    return (
+      <div className="page gpc-page">
+        <div className="gpc-ended">
+          <span className="gpc-ended-icon" aria-hidden="true">
+            <CalendarCheck size={26} />
+          </span>
+          <h1 className="gpc-title">Your practice is planned</h1>
+          <p className="gpc-sub">
+            {formatWhen(planned.startsAt)}. We&apos;ll remind you{" "}
+            {REMIND_BEFORE_MIN} minutes before, and you can start it from Group
+            Practice.
+          </p>
+          {reminderHelp(pushState) && (
+            <p className="gpt-reminder-note gpc-center-note" role="status">
+              <Bell size={14} aria-hidden="true" /> {reminderHelp(pushState)}
+            </p>
+          )}
+          <div className="gpc-card gpc-planned-summary">
+            <strong>{roomTitle(planned)}</strong>
+            <span>{roomMeta(planned)}</span>
+            <span>
+              {planned.private
+                ? "Private: only people with your code can join."
+                : "Public: listed under Upcoming for other members."}
+            </span>
+            <span className="gpc-planned-code">
+              Invite code <strong>{spacedCode(planned.code)}</strong>
+            </span>
+          </div>
+          <button className="gpc-primary" onClick={() => navigate(LOBBY)}>
+            Back to Group Practice
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const today = new Date();
+  const lastDay = new Date();
+  lastDay.setDate(today.getDate() + MAX_PLAN_DAYS);
+
+  return (
+    <div className="page gpc-page">
+      <button className="gpc-back" onClick={() => navigate(LOBBY)}>
+        <ArrowLeft size={16} /> Group Practice
+      </button>
+      <h1 className="gpc-title">
+        {teamMode ? "Practice as a team" : "Start a practice"}
+      </h1>
+      <p className="gpc-sub">Audio only, and calls are never recorded.</p>
+
+      <DailyCallTime usage={usage} />
+
+      <form className="gpc-start-form" onSubmit={submit} noValidate>
+        {teamMode ? (
+          <p className="gpc-team-note">
+            <LockKeyhole size={16} aria-hidden="true" />
+            <span>
+              Private to your team. Your team members get a notification to
+              join when you start.
+            </span>
+          </p>
+        ) : (
+          <>
+        <p className="gpc-field-label" id="gpc-who-label">
+          Who can join
+        </p>
+        <div
+          className="gpc-visibility"
+          role="radiogroup"
+          aria-labelledby="gpc-who-label"
+        >
+          <button
+            type="button"
+            role="radio"
+            aria-checked={!isPrivate}
+            className="gpc-visibility-option"
+            onClick={() => setIsPrivate(false)}
+          >
+            <Globe size={18} aria-hidden="true" />
+            <span>
+              <strong>Public</strong>
+              <span>Listed under Find a practice for any member.</span>
+            </span>
+          </button>
+          <button
+            type="button"
+            role="radio"
+            aria-checked={isPrivate}
+            className="gpc-visibility-option"
+            onClick={() => setIsPrivate(true)}
+          >
+            <LockKeyhole size={18} aria-hidden="true" />
+            <span>
+              <strong>Private</strong>
+              <span>Hidden. Only people with your code can join.</span>
+            </span>
+          </button>
+        </div>
+
+          </>
+        )}
+
+        <p className="gpc-field-label">Seats</p>
+        <div
+          className="gpc-chips gpc-seat-chips"
+          role="group"
+          aria-label="Seats"
+        >
+          {seatChoices.map((n) => (
+            <button
+              key={n}
+              type="button"
+              className="gpc-chip gpc-chip-seat"
+              aria-pressed={n === seats}
+              onClick={() => setSeats(n)}
+            >
+              {n} seats
+            </button>
+          ))}
+          <button
+            type="button"
+            className={`gpc-chip gpc-chip-seat ${unlimitedSeats ? "" : "is-locked"}`}
+            aria-pressed={seats === "unlimited"}
+            aria-expanded={unlimitedSeats ? undefined : showUnlimitedUpsell}
+            onClick={() =>
+              unlimitedSeats
+                ? setSeats("unlimited")
+                : setShowUnlimitedUpsell((v) => !v)
+            }
+          >
+            {!unlimitedSeats && <LockKeyhole size={12} aria-hidden="true" />}
+            Unlimited
+          </button>
+        </div>
+        {!unlimitedSeats && showUnlimitedUpsell && (
+          <div className="gpc-upsell" role="status">
+            <Sparkles size={16} aria-hidden="true" />
+            <div>
+              <strong>Upgrade to unlimited seats</strong>
+              <span>
+                Host calls with as many people as you like on Loquiex Infinity.
+              </span>
+              <div className="gpc-upsell-actions">
+                <button
+                  type="button"
+                  className="gpc-upsell-btn"
+                  onClick={() =>
+                    navigate("/app/membership", {
+                      state: { reason: "unlimited" },
+                    })
+                  }
+                >
+                  Upgrade to Infinity
+                </button>
+                <button
+                  type="button"
+                  className="gpc-link"
+                  onClick={() => setShowUnlimitedUpsell(false)}
+                >
+                  Not now
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <p className="gpc-field-label" id="gpc-how-label">
+          How would you like to practise?
+        </p>
+        <div
+          className="gpc-modes"
+          role="radiogroup"
+          aria-labelledby="gpc-how-label"
+        >
+          <div
+            className="gpc-mode"
+            data-selected={mode === "host" ? "true" : undefined}
+          >
+            <button
+              type="button"
+              role="radio"
+              aria-checked={mode === "host"}
+              className="gpc-mode-head"
+              onClick={() => setMode("host")}
+            >
+              <MessageSquareText size={26} aria-hidden="true" />
+              <span>
+                <strong>Host a discussion</strong>
+                <span>
+                  Bring your own topic and let others join the conversation.
+                </span>
+              </span>
+              <span className="gpc-radio" aria-hidden="true" />
+            </button>
+            {mode === "host" && (
+              <div className="gpc-mode-body">
+                <label className="gpc-field-label" htmlFor="gpc-topic">
+                  Discussion topic
+                </label>
+                <textarea
+                  id="gpc-topic"
+                  className="gpc-input gpc-topic-input"
+                  rows={2}
+                  value={topic}
+                  maxLength={TOPIC_MAX}
+                  onChange={(e) => setTopic(e.target.value.slice(0, TOPIC_MAX))}
+                  placeholder="E.g. Are we too dependent on technology?"
+                  aria-invalid={Boolean(error) && !topic.trim()}
+                  aria-describedby="gpc-topic-count"
+                />
+                <small className="gpc-input-hint gpc-topic-hint">
+                  <span>Members see this as the title.</span>
+                  <span id="gpc-topic-count" className="gpc-topic-count">
+                    {topic.length}/{TOPIC_MAX}
+                  </span>
+                </small>
+              </div>
+            )}
+          </div>
+
+          <div
+            className="gpc-mode"
+            data-selected={mode === "guided" ? "true" : undefined}
+          >
+            <button
+              type="button"
+              role="radio"
+              aria-checked={mode === "guided"}
+              className="gpc-mode-head"
+              onClick={() => setMode("guided")}
+            >
+              <Target size={26} aria-hidden="true" />
+              <span>
+                <strong>Practise with Loquiex</strong>
+                <span>
+                  Let Loquiex get the conversation started with categories and
+                  discussion prompts.
+                </span>
+              </span>
+              <span className="gpc-radio" aria-hidden="true" />
+            </button>
+          </div>
+        </div>
+
+        {mode === "guided" && (
+          <div className="gpc-guided">
+            <p className="gpc-field-label">Choose a category</p>
+            <div className="gpc-chips" role="group" aria-label="Category">
+              {CATEGORIES.map((c) => (
+                <button
+                  key={c.id}
+                  type="button"
+                  className="gpc-chip"
+                  aria-pressed={c.id === categoryId}
+                  onClick={() => pickCategory(c.id)}
+                >
+                  {c.title}
+                </button>
+              ))}
+            </div>
+
+            <p className="gpc-field-label">First prompt</p>
+            <div
+              className="gpc-prompt-preview"
+              aria-live="polite"
+              data-muted={ownPrompt.trim() ? "true" : undefined}
+            >
+              {prompt}
+            </div>
+            <button
+              type="button"
+              className="gpc-link"
+              style={{ margin: "0 0 14px" }}
+              onClick={() => setPrompt(getRandomPrompt(categoryId))}
+            >
+              <RefreshCw size={14} /> Another prompt
+            </button>
+            <div className="gpc-own-prompt">
+              <PencilLine size={20} aria-hidden="true" />
+              <div>
+                <label htmlFor="gpc-own-prompt">
+                  <strong>Write your own prompt</strong>
+                  <span>
+                    Have something specific you&apos;d like to discuss?
+                  </span>
+                </label>
+                <input
+                  id="gpc-own-prompt"
+                  className="gpc-input"
+                  value={ownPrompt}
+                  maxLength={300}
+                  onChange={(e) => setOwnPrompt(e.target.value)}
+                  placeholder="Enter your discussion prompt..."
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
+        <p className="gpc-field-label" id="gpc-when-label">
+          When do you want to practise?
+        </p>
+        <div
+          className="gpc-when"
+          role="radiogroup"
+          aria-labelledby="gpc-when-label"
+        >
+          <button
+            type="button"
+            role="radio"
+            aria-checked={whenNow === "now"}
+            className="gpc-when-option"
+            disabled={usedUpToday}
+            onClick={() => {
+              setWhen("now");
+              submit(null, "now");
+            }}
+          >
+            Start now
+          </button>
+          <button
+            type="button"
+            role="radio"
+            aria-checked={whenNow === "later"}
+            className="gpc-when-option"
+            onClick={() => setWhen("later")}
+          >
+            Schedule for later
+          </button>
+        </div>
+
+        {usedUpToday && (
+          <p className="gpc-seat-note">
+            You&apos;ve used today&apos;s call time, so you can schedule a
+            practice for later.
+          </p>
+        )}
+
+        {whenNow === "later" && (
+          <div className="gpc-schedule">
+            <label className="gpc-schedule-field">
+              <span className="gpc-field-label">Date</span>
+              <span className="gpc-input-icon">
+                <CalendarDays size={18} aria-hidden="true" />
+                <input
+                  type="date"
+                  className="gpc-input"
+                  value={planDate}
+                  min={dateInputValue(today)}
+                  max={dateInputValue(lastDay)}
+                  onChange={(e) => setPlanDate(e.target.value)}
+                />
+              </span>
+            </label>
+            <div className="gpc-schedule-field">
+              <span className="gpc-field-label" id="gpc-time-label">
+                Start time
+              </span>
+              <div
+                className="gpc-time12"
+                role="group"
+                aria-labelledby="gpc-time-label"
+              >
+                <Clock size={18} aria-hidden="true" />
+                <select
+                  className="gpc-input gpc-time-select"
+                  value={planHour}
+                  onChange={(e) => setPlanHour(e.target.value)}
+                  aria-label="Hour"
+                >
+                  {HOURS_12.map((h) => (
+                    <option key={h} value={String(h)}>
+                      {h}
+                    </option>
+                  ))}
+                </select>
+                <span className="gpc-time-colon" aria-hidden="true">
+                  :
+                </span>
+                <select
+                  className="gpc-input gpc-time-select"
+                  value={planMinute}
+                  onChange={(e) => setPlanMinute(e.target.value)}
+                  aria-label="Minutes"
+                >
+                  {MINUTES.map((m) => (
+                    <option key={m} value={m}>
+                      {m}
+                    </option>
+                  ))}
+                </select>
+                <div
+                  className="gpc-ampm"
+                  role="radiogroup"
+                  aria-label="am or pm"
+                >
+                  {["am", "pm"].map((x) => (
+                    <button
+                      key={x}
+                      type="button"
+                      role="radio"
+                      aria-checked={planAmPm === x}
+                      onClick={() => setPlanAmPm(x)}
+                    >
+                      {x}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <p className="gpc-zone-note">
+              <Globe size={13} aria-hidden="true" />
+              Times show in your local time
+            </p>
+          </div>
+        )}
+
+        {error && (
+          <p className="gpc-form-error" role="alert">
+            {error}
+          </p>
+        )}
+
+        <button type="submit" className="gpc-primary" disabled={busy}>
+          {busy ? (
+            <LoaderCircle size={18} className="gpc-spin" />
+          ) : whenNow === "later" ? (
+            <CalendarDays size={18} />
+          ) : (
+            <Plus size={18} />
+          )}
+          {whenNow === "later"
+            ? "Schedule practice"
+            : isPrivate
+              ? "Start a private practice"
+              : "Start a public practice"}
+        </button>
+      </form>
+      <p className="gpc-note">
+        Group practice uses your microphone. We&apos;ll ask for it when you
+        join. Use headphones if you can, so others don&apos;t hear an echo.
+      </p>
+    </div>
+  );
+}
+
+// Steps for turning a blocked microphone back on, with Try again.
+function MicHelp({ error, busy, onRetry, onListen, compact = false }) {
+  const help = micHelp(error);
+  return (
+    <div className={`gpc-mic-help ${compact ? "gpc-mic-help-compact" : ""}`}>
+      <p className="gpc-mic-help-title">
+        <MicOff size={18} aria-hidden="true" /> {help.title}
+      </p>
+      <p className="gpc-mic-help-text">{help.text}</p>
+      {help.steps.length > 0 && (
+        <ol className="gpc-mic-steps">
+          {help.steps.map((step) => (
+            <li key={step}>{step}</li>
+          ))}
+        </ol>
+      )}
+      <div className="gpc-mic-actions">
+        <button
+          type="button"
+          className="gpc-primary"
+          onClick={onRetry}
+          disabled={busy}
+        >
+          {busy ? (
+            <LoaderCircle size={18} className="gpc-spin" />
+          ) : (
+            <RefreshCw size={18} />
+          )}
+          Try again
+        </button>
+        {onListen && (
+          <button type="button" className="gpc-secondary" onClick={onListen}>
+            <Volume2 size={16} /> Join and listen only
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Asks for the microphone before joining, like Zoom does.
+function MicPrompt({ title, step, error, onAllow, onDeny, onBack }) {
+  const asking = step === "asking";
+  return (
+    <div
+      className="gpc-modal-backdrop"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="gpc-mic-title"
+    >
+      <div className="gpc-modal">
+        {step === "blocked" ? (
+          <>
+            <h2 className="gpc-modal-title" id="gpc-mic-title">
+              Turn on your microphone
+            </h2>
+            <MicHelp
+              error={error}
+              onRetry={onAllow}
+              onListen={onDeny}
+              busy={false}
+            />
+          </>
+        ) : (
+          <>
+            <span className="gpc-modal-icon" aria-hidden="true">
+              <Mic size={28} />
+            </span>
+            <h2 className="gpc-modal-title" id="gpc-mic-title">
+              Allow microphone?
+            </h2>
+            <p className="gpc-modal-text">
+              {title ? (
+                <>
+                  You&apos;re joining <strong>{title}</strong>.{" "}
+                </>
+              ) : null}
+              Loquiex needs your microphone so others in the practice can hear
+              you. You can mute and unmute any time.
+            </p>
+            {asking && (
+              <p className="gpc-modal-hint">
+                <LoaderCircle size={14} className="gpc-spin" /> Choose{" "}
+                <strong>Allow</strong> in the box your phone or browser shows.
+              </p>
+            )}
+            <div className="gpc-modal-actions">
+              <button
+                type="button"
+                className="gpc-primary"
+                onClick={onAllow}
+                disabled={asking}
+              >
+                <Mic size={18} /> Allow microphone
+              </button>
+              <button
+                type="button"
+                className="gpc-secondary"
+                onClick={onDeny}
+                disabled={asking}
+              >
+                Don&apos;t allow, just listen
+              </button>
+            </div>
+          </>
+        )}
+        <button type="button" className="gpc-link gpc-center" onClick={onBack}>
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// A live call. Reached from Find a practice, Start a practice, a code, or
+// the call bar (when the member comes back from another tab). The call
+// itself lives in lib/activeCall.js, so leaving this page doesn't end it.
+export function GroupPracticeCall() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { roomId } = useParams();
+  const active = useActiveCall();
+  // What to join, from the screen that opened this one (kept after the URL
+  // changes to the real room id).
+  const [entry] = useState(() => ({
+    create: location.state?.create || null,
+    code: location.state?.code || null,
+    preview: location.state?.preview || null,
+  }));
+  // Coming back to the call we're already in (call bar, Back, or refresh
+  // of the room address in the same tab)?
+  const [resuming] = useState(() => {
+    const snap = activeSession()?.snapshot();
+    if (!snap || snap.status === "ended") return false;
+    if (entry.create || entry.code) return false;
+    return snap.room?.id === roomId || snap.status === "joining";
+  });
+  const pendingStream = useRef(null);
+  // checking | ask | asking | blocked | ready | joined
+  const [micStep, setMicStep] = useState(resuming ? "joined" : "checking");
+  const [micError, setMicError] = useState(null);
+  const [dismissed, setDismissed] = useState(null);
+
+  const allowed = hasGroupPractice();
+  const missingRoom = roomId === "new" && !entry.create && !resuming;
+
+  const join = (stream) => {
+    setMicStep("joined");
+    startCall(
+      entry.create
+        ? { create: entry.create }
+        : entry.code
+          ? { code: entry.code }
+          : { roomId },
+      stream,
+    );
+  };
+
+  // Ask the browser for the microphone (shows its Allow / Block box).
+  const askMic = async () => {
+    setMicStep("asking");
+    const result = await requestMic();
+    if (result.stream) {
+      join(result.stream);
+      return;
+    }
+    setMicError(result.error);
+    setMicStep("blocked");
+  };
+
+  // Already allowed before? Join straight away. Blocked? Show how to fix it.
+  useEffect(() => {
+    if (!allowed || missingRoom || resuming) return undefined;
+    let cancelled = false;
+    micPermissionState().then(async (state) => {
+      if (cancelled) return;
+      if (state === "granted") {
+        const result = await requestMic();
+        if (cancelled) {
+          result.stream?.getTracks().forEach((t) => t.stop());
+          return;
+        }
+        if (result.stream) {
+          pendingStream.current = result.stream;
+          setMicStep("ready");
+        } else {
+          setMicError(result.error);
+          setMicStep("blocked");
+        }
+      } else if (state === "denied") {
+        setMicError("blocked");
+        setMicStep("blocked");
+      } else {
+        setMicStep("ask");
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [allowed, missingRoom, resuming]);
+
+  // Mic was already allowed: join once it's ready.
+  useEffect(() => {
+    if (micStep === "ready" && pendingStream.current) {
+      const stream = pendingStream.current;
+      pendingStream.current = null;
+      join(stream);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [micStep]);
+
+  // Only a microphone we asked for but never used is stopped here. The
+  // call itself keeps going on other tabs.
+  useEffect(
+    () => () => {
+      pendingStream.current?.getTracks().forEach((t) => t.stop());
+      pendingStream.current = null;
+    },
+    [],
+  );
+
+  // Keep the URL on the real room id (shareable, and survives refresh).
+  const liveRoomId = active?.room?.id;
+  useEffect(() => {
+    if (micStep === "joined" && liveRoomId && liveRoomId !== roomId) {
+      navigate(`${CALL}/${liveRoomId}`, { replace: true, state: {} });
+    }
+  }, [micStep, liveRoomId, roomId, navigate]);
+
+  const leave = () => {
+    leaveCall();
+    navigate(LOBBY);
+  };
+  const backToLobby = () => {
+    clearEndedCall();
+    navigate(LOBBY);
+  };
+
+  if (!allowed) return <Navigate to="/app/group-practice" replace />;
+  if (missingRoom) return <Navigate to={START} replace />;
+
+  if (micStep !== "joined") {
+    const preview = entry.preview;
+    return (
+      <div className="page gpc-page">
+        <button className="gpc-back" onClick={() => navigate(LOBBY)}>
+          <ArrowLeft size={16} /> Group Practice
+        </button>
+        <h1 className="gpc-title gpc-title-call">
+          {preview?.title || "Group practice"}
+        </h1>
+        <p className="gpc-sub">
+          {preview
+            ? `${preview.private ? "Private" : "Public"} · ${preview.meta || "Audio-only group"}${preview.hostName ? ` · Host: ${preview.hostName}` : ""}`
+            : "Audio-only group"}
+        </p>
+        {micStep === "checking" || micStep === "ready" ? (
+          <div className="gpc-empty">
+            <span className="gpc-status">
+              <LoaderCircle size={16} className="gpc-spin" /> Getting your
+              microphone ready…
+            </span>
+          </div>
+        ) : (
+          <MicPrompt
+            title={preview?.title}
+            step={micStep}
+            error={micError}
+            onAllow={askMic}
+            onDeny={() => join(null)}
+            onBack={() => navigate(LOBBY)}
+          />
+        )}
+      </div>
+    );
+  }
+
+  // Left from somewhere else (e.g. the call bar) while this page was open.
+  if (!active) return <Navigate to={LOBBY} replace />;
+
+  if (active.status === "ended") {
+    const code = active.endReason?.code;
+    if (code === "time-up") return <TimeUp onBack={backToLobby} />;
+    if (code === "no-plan") {
+      clearEndedCall();
+      return <Navigate to="/app/group-practice" replace />;
+    }
+    return (
+      <div className="page gpc-page">
+        <div className="gpc-ended">
+          <span className="gpc-ended-icon" aria-hidden="true">
+            <PhoneOff size={26} />
+          </span>
+          <h1 className="gpc-title">{END_COPY[code] || END_COPY.error}</h1>
+          <p className="gpc-sub">
+            {active.endReason?.message &&
+            END_COPY[code] !== active.endReason.message
+              ? active.endReason.message
+              : "Pick another practice or start your own."}
+          </p>
+          <button className="gpc-primary" onClick={backToLobby}>
+            Back to Group Practice
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (active.status !== "live") {
+    return (
+      <div className="page gpc-page">
+        <button className="gpc-back" onClick={leave}>
+          <ArrowLeft size={16} /> Group Practice
+        </button>
+        <div className="gpc-empty">
+          <span className="gpc-status">
+            <LoaderCircle size={16} className="gpc-spin" /> Joining the
+            practice… The first call of the day can take up to a minute.
+          </span>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <LiveCall
+      call={active}
+      session={callActions}
+      dismissed={dismissed}
+      onDismiss={setDismissed}
+      onBack={() => navigate(LOBBY)}
+      onLeave={leave}
+    />
+  );
+}
+
+function seatStatus(m) {
+  if (m.away) return "Reconnecting…";
+  if (!m.isSelf && m.connection !== "connected")
+    return m.connection === "failed" ? "Can't connect" : "Connecting…";
+  if (m.speaking) return "Speaking";
+  if (m.hand) return "Hand raised";
+  if (m.isSelf) return m.muted ? "Muted" : "Mic on";
+  if (m.muted) return "Muted";
+  return "Listening";
+}
+
+// The small invite code at the top of the call. Tapping it copies the code.
+function CodePill({ code, isPrivate }) {
+  const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    if (!copied) return undefined;
+    const t = setTimeout(() => setCopied(false), 1600);
+    return () => clearTimeout(t);
+  }, [copied]);
+  return (
+    <button
+      type="button"
+      className="gpc-code-pill"
+      onClick={async () => setCopied(await copyText(code))}
+      aria-label={`Invite code ${code.split("").join(" ")}. Tap to copy.`}
+    >
+      {isPrivate && <LockKeyhole size={12} aria-hidden="true" />}
+      <span>{copied ? "Copied" : "Invite code"}</span>
+      <strong>{spacedCode(code)}</strong>
+    </button>
+  );
+}
+
+// Minutes box at the top of the call.
+// Today's call time in the room. The server charges a minute at a time
+// while 2+ people are in the call; between those updates the bar and the
+// time keep counting down smoothly so members can see time running.
+function CallLimit({ usage, joinedAt, warning, together }) {
+  const unlimited = !usage || usage.total === null;
+  const [now, setNow] = useState(() => Date.now());
+  const serverLeft = unlimited ? null : Number(usage.left) || 0;
+  // When the server's number last changed (adjusted during render).
+  const [sync, setSync] = useState(() => ({ left: serverLeft, at: now }));
+  if (sync.left !== serverLeft) setSync({ left: serverLeft, at: now });
+  const syncedAt = sync.at;
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+  const running = together && !unlimited && serverLeft > 0;
+  const drift = running ? Math.min(1, (now - syncedAt) / 60000) : 0;
+  const left = unlimited ? null : Math.max(0, serverLeft - drift);
+  const pct = unlimited
+    ? 0
+    : Math.max(0, Math.min(100, (left / Math.max(1, usage.total)) * 100));
+  return (
+    <div className={`gpc-limit ${warning ? "gpc-limit-warn" : ""}`}>
+      <div className="gpc-limit-row">
+        <Clock size={14} aria-hidden="true" />
+        <span className="gpc-limit-label">Today&apos;s call time</span>
+        <strong>
+          {unlimited ? "Unlimited" : `${formatCallTime(Math.ceil(left))} left`}
+        </strong>
+        <span className="gpc-limit-timer">
+          <span className="gpc-live-dot" aria-hidden="true" />
+          <Elapsed since={joinedAt} />
+        </span>
+      </div>
+      {!unlimited && (
+        <span className="gpc-bar" aria-hidden="true">
+          <span style={{ width: `${pct}%` }} />
+        </span>
+      )}
+      <small>
+        {formatCallTime(usage?.usedToday || 0)} used today
+        {unlimited
+          ? " · unlimited on your plan"
+          : ` of ${formatCallTime(usage.total)} · resets at midnight`}
+        . Time counts only while someone else is in the call.
+      </small>
+    </div>
+  );
+}
+
+// Host-only category switch: a native dropdown laid over the label.
+function CategorySwitch({ value, onChange, children, className = "" }) {
+  return (
+    <label className={`gpc-cat-switch ${className}`}>
+      {children}
+      <ChevronDown size={18} aria-hidden="true" />
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        aria-label="Switch category"
+      >
+        {!categoryOf(value) && <option value={value}>Choose a category</option>}
+        {CATEGORIES.map((c) => (
+          <option key={c.id} value={c.id}>
+            {c.title}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+function LiveCall({ call, session, dismissed, onDismiss, onBack, onLeave }) {
+  const { room, members, usage } = call;
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
+  const [micBusy, setMicBusy] = useState(false);
+  const unlimited = !usage || usage.total === null;
+  const left = unlimited ? null : usage.left;
+  const warning = unlimited
+    ? null
+    : left <= 1
+      ? "final"
+      : left <= 5
+        ? "low"
+        : null;
+  // Host on the first row on their own, then everyone else two by two.
+  const sorted = useMemo(
+    () =>
+      [...members].sort((a, b) => {
+        if (a.userId === room.hostId) return -1;
+        if (b.userId === room.hostId) return 1;
+        if (a.isSelf) return -1;
+        if (b.isSelf) return 1;
+        return a.joinedAt - b.joinedAt;
+      }),
+    [members, room.hostId],
+  );
+  const noMic = !call.hasMic;
+  const micBlocked = noMic && call.micError && call.micError !== "listen-only";
+  const hostLed = room.mode === "host";
+  const category = categoryOf(room.categoryId);
+
+  const switchCategory = (id) => {
+    const next = categoryOf(id);
+    const p = getRandomPrompt(id);
+    if (next && p) session?.setPrompt(p, next);
+  };
+
+  const newPrompt = () => {
+    const next = getRandomPrompt(room.categoryId || CATEGORIES[0].id);
+    if (next) session?.setPrompt(next, category || CATEGORIES[0]);
+  };
+
+  const savePrompt = (e) => {
+    e.preventDefault();
+    const text = draft.trim();
+    if (!text) return;
+    session?.setPrompt(text);
+    setDraft("");
+    setEditing(false);
+  };
+
+  // Unmute asks for the microphone if the member joined without it.
+  const toggleMic = async () => {
+    if (!call.muted) {
+      session?.setMuted(true);
+      return;
+    }
+    if (call.hasMic) {
+      session?.setMuted(false);
+      return;
+    }
+    setMicBusy(true);
+    await session?.enableMic();
+    setMicBusy(false);
+  };
+
+  const title = hostLed ? room.topic || room.categoryTitle : room.categoryTitle;
+
+  return (
+    <div className="page gpc-page gpc-call">
+      <div className="gpc-call-top">
+        <button className="gpc-back" onClick={onBack}>
+          <ArrowLeft size={16} /> Group Practice
+        </button>
+        {room.code && <CodePill code={room.code} isPrivate={room.private} />}
+      </div>
+
+      <CallLimit
+        usage={usage}
+        joinedAt={call.joinedAt}
+        warning={warning}
+        together={members.filter((m) => !m.away).length >= 2}
+      />
+
+      <div className="gpc-call-head">
+        {!hostLed && call.isHost ? (
+          <CategorySwitch value={room.categoryId} onChange={switchCategory}>
+            <h1 className="gpc-title gpc-title-call">{title}</h1>
+          </CategorySwitch>
+        ) : (
+          <h1 className="gpc-title gpc-title-call">{title}</h1>
+        )}
+        {hostLed && call.isHost && (
+          <CategorySwitch
+            value={room.categoryId}
+            onChange={switchCategory}
+            className="gpc-cat-pill"
+          >
+            <span>
+              Prompt ideas: <strong>{category?.title || "Choose"}</strong>
+            </span>
+          </CategorySwitch>
+        )}
+      </div>
+
+      {warning && dismissed !== warning && (
+        <div className="gpc-alert gpc-alert-warn" role="alert">
+          <p>
+            <Clock size={18} aria-hidden="true" />
+            {warning === "final"
+              ? "One minute left."
+              : "Your practice time is running low."}
+          </p>
+          <span>
+            {warning === "final"
+              ? "You'll leave the call when your time runs out. The others can keep going."
+              : `You have ${formatCallTime(left)} of call time left today.`}
+          </span>
+          <button className="gpc-link" onClick={() => onDismiss(warning)}>
+            Got it
+          </button>
+        </div>
+      )}
+
+      {micBlocked ? (
+        <div className="gpc-alert" role="alert">
+          <MicHelp
+            compact
+            error={call.micError}
+            busy={micBusy}
+            onRetry={toggleMic}
+          />
+        </div>
+      ) : noMic ? (
+        <div className="gpc-alert">
+          <p>
+            <MicOff size={18} aria-hidden="true" /> You&apos;re listening only
+          </p>
+          <span>
+            Tap Unmute when you want to speak. We&apos;ll ask for your
+            microphone then.
+          </span>
+        </div>
+      ) : null}
+
+      {call.audioBlocked && (
+        <div className="gpc-alert" role="alert">
+          <p>
+            <Volume2 size={18} aria-hidden="true" /> Sound is paused
+          </p>
+          <span>Your browser needs a tap before it plays the room.</span>
+          <button className="gpc-link" onClick={() => session?.resumeAudio()}>
+            Tap to hear the room
+          </button>
+        </div>
+      )}
+
+      <section
+        className={`gpc-people gpc-people-${
+          members.length <= 2
+            ? "s"
+            : members.length <= 4
+              ? "m"
+              : members.length <= 6
+                ? "l"
+                : "xl"
+        } ${sorted.length % 2 ? "gpc-people-odd" : "gpc-people-even"}`}
+        aria-label="People in the call"
+      >
+        {sorted.map((m) => {
+          const waiting = !m.isSelf && m.connection !== "connected";
+          const isHost = room.hostId === m.userId;
+          return (
+            <div
+              key={m.userId}
+              className={`gpc-person ${isHost ? "gpc-person-host" : ""} ${m.speaking ? "gpc-speaking" : ""} ${waiting || m.away ? "gpc-waiting" : ""}`}
+            >
+              <span className="gpc-member-icons">
+                {m.hand && (
+                  <Hand
+                    size={14}
+                    className="gpc-hand"
+                    aria-label="Hand raised"
+                  />
+                )}
+                {m.muted && <MicOff size={14} aria-label="Muted" />}
+              </span>
+              <Avatar member={m} self={m.isSelf} />
+              <span className="gpc-member-name">
+                {isHost && (
+                  <Crown
+                    size={11}
+                    className="gpc-host-crown"
+                    aria-label="Host"
+                  />
+                )}
+                {m.isSelf ? "You" : m.name}
+              </span>
+              <span className="gpc-member-tag">
+                {m.isSelf && noMic ? "No microphone" : seatStatus(m)}
+              </span>
+            </div>
+          );
+        })}
+      </section>
+
+      <section className="gpc-discuss" aria-labelledby="gpc-discuss-title">
+        <div className="gpc-discuss-head">
+          <h2 id="gpc-discuss-title">Discussion prompt</h2>
+          {call.isHost && !editing && (
+            <div className="gpc-discuss-actions">
+              <button type="button" onClick={newPrompt}>
+                <Shuffle size={15} aria-hidden="true" /> Next prompt
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setDraft("");
+                  setEditing(true);
+                }}
+              >
+                <PencilLine size={15} aria-hidden="true" /> Write
+              </button>
+            </div>
+          )}
+        </div>
+        {editing ? (
+          <form onSubmit={savePrompt} className="gpc-discuss-form">
+            <input
+              className="gpc-input"
+              value={draft}
+              maxLength={300}
+              autoFocus
+              onChange={(e) => setDraft(e.target.value)}
+              placeholder="Write the next prompt..."
+              aria-label="Your prompt"
+            />
+            <div className="gpc-discuss-form-buttons">
+              <button
+                type="button"
+                className="gpc-text-button"
+                onClick={() => setEditing(false)}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="gpt-join"
+                disabled={!draft.trim()}
+              >
+                Use prompt
+              </button>
+            </div>
+          </form>
+        ) : (
+          <div className="gpc-discuss-box">
+            <p>
+              {room.prompt ||
+                (hostLed
+                  ? room.topic
+                  : "Talk about anything on your mind today.")}
+            </p>
+            <span>
+              {call.isHost
+                ? "Share your opinion and explain why."
+                : "Share your opinion and explain why. Raise your hand to speak next."}
+            </span>
+          </div>
+        )}
+      </section>
+
+      <div className="gpc-controls">
+        <button
+          type="button"
+          className="gpc-control"
+          onClick={toggleMic}
+          aria-pressed={call.muted}
+          disabled={micBusy}
+        >
+          {micBusy ? (
+            <LoaderCircle size={22} className="gpc-spin" />
+          ) : call.muted ? (
+            <MicOff size={22} />
+          ) : (
+            <Mic size={22} />
+          )}
+          <span>{call.muted ? "Unmute" : "Mute"}</span>
+        </button>
+        <button
+          type="button"
+          className="gpc-control"
+          onClick={() => session?.setHand(!call.hand)}
+          aria-pressed={call.hand}
+        >
+          <Hand size={22} />
+          <span>{call.hand ? "Lower hand" : "Raise hand"}</span>
+        </button>
+        <button
+          type="button"
+          className="gpc-control gpc-leave"
+          onClick={onLeave}
+        >
+          <PhoneOff size={22} />
+          <span>Leave</span>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+const CODE_ERRORS = {
+  "bad-code": "Codes have 6 letters and numbers. Check the code and try again.",
+  "no-code":
+    "No live call has that code. It may have ended, or the code has a typo.",
+  "slow-down": "Too many wrong codes. Please wait a few minutes and try again.",
+  "signed-out": "Please sign in again to join group practice.",
+  timeout: "We couldn't reach the server. Check your connection and try again.",
+};
+
+// Join a call with a code: /app/group-practice/join and /join/:code (the
+// link members share). Shows the call before joining.
+export function GroupPracticeJoin() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { code: codeParam } = useParams();
+  const code = normaliseCode(codeParam);
+  const allowed = hasGroupPractice();
+  const [usage] = useGroupUsage();
+  // Result of the latest lookup, tagged with the code + visit it belongs to.
+  const visit = `${code}:${location.key}`;
+  const [result, setResult] = useState(null);
+
+  useEffect(() => {
+    if (!code) return undefined;
+    let alive = true;
+    lookupCode(code).then((reply) => {
+      if (!alive) return;
+      if (reply?.ok) setResult({ visit, status: "found", room: reply.room });
+      else if (reply?.error === "not-started" && reply.scheduled)
+        setResult({ visit, status: "scheduled", planned: reply.scheduled });
+      else
+        setResult({
+          visit,
+          status: "error",
+          error:
+            CODE_ERRORS[reply?.error] ||
+            reply?.message ||
+            "Something went wrong. Please try again.",
+        });
+    });
+    return () => {
+      alive = false;
+    };
+    // location.key (in visit): look up again when the same code is entered twice.
+  }, [code, visit]);
+
+  const lookup = !code
+    ? { status: "idle" }
+    : result?.visit === visit
+      ? result
+      : { status: "loading" };
+
+  const submit = (value) =>
+    navigate(`${JOIN}/${value}`, { replace: Boolean(code) });
+  const room = lookup.room;
+  const full = room && room.members.length >= room.max;
+  const timeUp =
+    allowed && usage.loaded && usage.left !== null && usage.left <= 0;
+
+  const planNames = groupPracticePlanNames()
+    .map((name) => `Loquiex ${name}`)
+    .join(" or ");
+
+  return (
+    <div className="page gpc-page">
+      <button className="gpc-back" onClick={() => navigate(LOBBY)}>
+        <ArrowLeft size={16} /> Group Practice
+      </button>
+      <p className="gpc-eyebrow">Group practice</p>
+      <h1 className="gpc-title">
+        {room ? "You're invited to a call" : "Join with a code"}
+      </h1>
+      <p className="gpc-sub">
+        {room
+          ? "Check the details, then join. We'll ask for your microphone first, and you can mute any time."
+          : "Enter the 6-character code your friend shared with you."}
+      </p>
+
+      {lookup.status === "loading" && (
+        <div className="gpc-empty">
+          <span className="gpc-status">
+            <LoaderCircle size={16} className="gpc-spin" /> Finding the call…
+            The first call of the day can take up to a minute.
+          </span>
+        </div>
+      )}
+
+      {room && (
+        <div className="gpc-card gpc-join-preview">
+          <div className="gpc-card-heading">
+            <span>Call {spacedCode(room.code)}</span>
+            {room.private && (
+              <span className="gpc-invite-tag">
+                <LockKeyhole size={12} aria-hidden="true" /> Private
+              </span>
+            )}
+          </div>
+          <h3>{roomTitle(room)}</h3>
+          <p>{roomMeta(room)}</p>
+          <div className="gpc-room-meta">
+            <span className="gpc-faces" aria-hidden="true">
+              {room.members.slice(0, 4).map((m) => (
+                <Avatar member={m} key={m.userId} />
+              ))}
+            </span>
+            <span>
+              {room.hostName ? `Hosted by ${room.hostName} · ` : ""}
+              {room.members.length} of {room.max} in the call
+            </span>
+          </div>
+        </div>
+      )}
+
+      {lookup.status === "scheduled" && (
+        <PlannedInvite planned={lookup.planned} allowed={allowed} />
+      )}
+
+      {room && !allowed && (
+        <>
+          <div className="gpc-alert">
+            <p>
+              <Sprout size={18} aria-hidden="true" /> Group practice is part of{" "}
+              {planNames}
+            </p>
+            <span>
+              Upgrade to join this call and practise live with others.
+            </span>
+          </div>
+          <button
+            className="gpc-primary"
+            onClick={() =>
+              navigate("/app/membership", { state: { reason: "group" } })
+            }
+          >
+            Explore membership
+          </button>
+        </>
+      )}
+
+      {room && allowed && timeUp && <TimeUpNote />}
+
+      {room && allowed && !timeUp && (
+        <button
+          className="gpc-primary"
+          disabled={full}
+          onClick={() =>
+            navigate(`${CALL}/${room.id}`, {
+              state: {
+                autoJoin: true,
+                code: room.code,
+                preview: {
+                  title: roomTitle(room),
+                  meta: roomMeta(room),
+                  hostName: room.hostName,
+                  private: room.private,
+                },
+              },
+            })
+          }
+        >
+          <Mic size={18} /> {full ? "This call is full" : "Join the call"}
+        </button>
+      )}
+
+      {(lookup.status === "idle" || lookup.status === "error") && (
+        <div className="gpc-card">
+          <CodeForm
+            key={code}
+            initial={code}
+            error={lookup.status === "error" ? lookup.error : ""}
+            onSubmit={submit}
+          />
+        </div>
+      )}
+
+      {room && (
+        <button className="gpc-link gpc-center" onClick={() => navigate(JOIN)}>
+          Use a different code
+        </button>
+      )}
+    </div>
+  );
+}
+
+// A code for a practice planned for later: when it starts, and Remind me.
+function PlannedInvite({ planned, allowed }) {
+  const navigate = useNavigate();
+  const [item, setItem] = useState(planned);
+  const [busy, setBusy] = useState(false);
+  const toggle = async () => {
+    if (!allowed)
+      return navigate("/app/membership", { state: { reason: "group" } });
+    setBusy(true);
+    const updated = await setReminder(item.id, !item.reminded);
+    setBusy(false);
+    if (updated) setItem(updated);
+  };
+  return (
+    <>
+      <div className="gpc-card gpc-join-preview">
+        <div className="gpc-card-heading">
+          <span>Starts {formatWhen(item.startsAt)}</span>
+          {item.private && (
+            <span className="gpc-invite-tag">
+              <LockKeyhole size={12} aria-hidden="true" /> Private
+            </span>
+          )}
+        </div>
+        <h3>{roomTitle(item)}</h3>
+        <p>
+          {roomMeta(item)} · Hosted by {item.hostName || "a member"} ·{" "}
+          {item.max} seats
+        </p>
+      </div>
+      {item.isHost ? (
+        <button className="gpc-primary" onClick={() => navigate(LOBBY)}>
+          Go to your planned practices
+        </button>
+      ) : (
+        <button className="gpc-primary" onClick={toggle} disabled={busy}>
+          {item.reminded ? <BellRing size={18} /> : <Bell size={18} />}
+          {!allowed
+            ? "Explore membership to join"
+            : item.reminded
+              ? "Reminder set · tap to remove"
+              : `Remind me ${REMIND_BEFORE_MIN} minutes before`}
+        </button>
+      )}
+      <p className="gpc-note">
+        This practice hasn&apos;t started yet. Come back to this code when it
+        starts.
+      </p>
+    </>
+  );
+}
+
+function TimeUpNote() {
+  return (
+    <div className="gpc-alert gpc-alert-warn" role="alert">
+      <p>
+        <ClockAlert size={18} aria-hidden="true" /> Your practice time is up
+      </p>
+      <span>
+        You&apos;ve used all of today&apos;s group call time. It resets at
+        midnight.
+      </span>
+    </div>
+  );
+}
