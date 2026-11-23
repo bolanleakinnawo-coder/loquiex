@@ -68,7 +68,7 @@ export default function MembershipCard({
   } else if (isOnAiTrial(user)) {
     const ends = aiTrialEndsAt(user);
     const days = aiTrialDaysLeft(user);
-    label = "AI feedback trial ends";
+    label = "Free trial ends";
     date = formatDay(ends);
     daysText = `${days} day${days === 1 ? "" : "s"} left`;
     // Round 14: the trial runs 3 days from when it was started.

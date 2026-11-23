@@ -27,7 +27,7 @@ export const PLANS = [
       groupMinutesPerMonth: 0,
     },
     features: [
-      "3-day free trial of AI feedback (up to 3 a day)",
+      "3-day free trial of Loquiex Bloom",
       "Unlimited personal practice",
       "Your recordings and streaks",
     ],
@@ -183,13 +183,20 @@ export function aiTrialDaysLeft(user = getStoredUser()) {
   return Math.max(1, Math.ceil(ms / (24 * 60 * 60 * 1000)));
 }
 
-// Plan allowances right now: Free gets the trial's AI feedback while it lasts.
+// Plan allowances right now. Round 18 (Sheriff): the 3-day free trial is
+// 3 days of everything in Loquiex Bloom.
+export const TRIAL_PLAN_ID = "bloom";
 export function effectiveLimits(user = getStoredUser()) {
   const plan = getPlan(user);
   if (plan.id === "free" && isOnAiTrial(user)) {
-    return { ...plan.limits, aiFeedbackPerDay: AI_TRIAL.perDay };
+    return PLANS.find((p) => p.id === TRIAL_PLAN_ID).limits;
   }
   return plan.limits;
+}
+
+// A paid plan, or the free trial (which gives Bloom's features).
+export function hasPlanFeatures(user = getStoredUser()) {
+  return isPaidPlan(user) || isOnAiTrial(user);
 }
 
 export function canUseAiFeedback(user = getStoredUser()) {
@@ -355,20 +362,20 @@ export function isPaidPlan(user) {
 
 // Group practice is on every paid plan (Bloom included from round 10).
 export function hasGroupPractice(user) {
-  return getPlan(user).limits.groupMinutesPerMonth !== 0;
+  return effectiveLimits(user).groupMinutesPerMonth !== 0;
 }
 
 // Most people (host included) in a call this member hosts: Bloom 2,
 // Flourish 6, Infinity unlimited (null).
 export function maxHostSeats(user) {
-  const limits = getPlan(user).limits;
+  const limits = effectiveLimits(user);
   if (limits.unlimitedSeats) return null;
   return limits.maxSeats || 6;
 }
 
 // Infinity hosts may open calls with "Unlimited" seats.
 export function canHostUnlimited(user) {
-  return Boolean(getPlan(user).limits.unlimitedSeats);
+  return Boolean(effectiveLimits(user).unlimitedSeats);
 }
 
 // Plans that include group practice, for "included with ..." copy.

@@ -326,7 +326,7 @@ router.post("/payments/:reference/refunded", async (req, res) => {
     if (payment.appliedAt && payment.kind === "book") {
       await LibraryItem.deleteMany({ user: payment.user, paymentRef: payment.reference });
     } else if (payment.appliedAt) {
-      const user = await User.findById(payment.user, { plan: 1, planExpiresAt: 1, appliedPaymentRefs: 1 });
+      const user = await User.findById(payment.user, { plan: 1, planExpiresAt: 1, planStartedAt: 1, appliedPaymentRefs: 1 });
       if (user?.plan === payment.planId && user.planExpiresAt && user.appliedPaymentRefs?.includes(payment.reference)) {
         const now = new Date();
         let expires = addMonths(user.planExpiresAt, -payment.months);

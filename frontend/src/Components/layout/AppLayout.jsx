@@ -5,6 +5,7 @@ import CallBar from "./CallBar";
 import LearnNotice from "../learn/LearnNotice";
 import PaymentSync from "./PaymentSync";
 import VerifyEmailNotice from "./VerifyEmailNotice";
+import PlanEndedNotice from "./PlanEndedNotice";
 
 export default function AppLayout() {
   return (
@@ -14,6 +15,7 @@ export default function AppLayout() {
       <main className="main-content">
         <CallBar />
         <VerifyEmailNotice />
+        <PlanEndedNotice />
         <LearnNotice />
         <PaymentSync />
         <Outlet />

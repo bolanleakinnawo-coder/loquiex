@@ -860,7 +860,7 @@ export default function Profile({ user }) {
             </span>
           )}
           <span className="pf-hero-info">
-            <strong className="pf-hero-name">{name}</strong>
+            <strong className="pf-hero-name">{profileUser?.username || name}</strong>
             <span className="pf-hero-since">{memberSince}</span>
           </span>
           <button

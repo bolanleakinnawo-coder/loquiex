@@ -493,7 +493,7 @@ async function aiUsedToday(req, user, excludeId = null) {
 router.get("/ai-allowance", authMiddleware, async (req, res) => {
   try {
     const user = await User.findById(req.userId).select(
-      "plan planExpiresAt teamPlan teamPlanExpiresAt createdAt timeZone trialByChoice aiTrialStartedAt",
+      "plan planExpiresAt planStartedAt teamPlan teamPlanExpiresAt createdAt timeZone trialByChoice aiTrialStartedAt",
     );
     if (!user) return res.status(404).json({ message: "User not found." });
 
@@ -545,7 +545,7 @@ router.post(
       }
 
       const user = await User.findById(req.userId).select(
-        "plan planExpiresAt teamPlan teamPlanExpiresAt createdAt timeZone trialByChoice aiTrialStartedAt",
+        "plan planExpiresAt planStartedAt teamPlan teamPlanExpiresAt createdAt timeZone trialByChoice aiTrialStartedAt",
       );
 
       // Finished results can always be read again.
@@ -566,13 +566,14 @@ router.post(
         });
       }
 
-      // Daily allowance (the member's own calendar day): the free trial's
-      // 3 a day, or the paid plan's cap (Bloom 5, Flourish 12, Infinity none).
+      // Daily allowance (the member's own calendar day): the free trial
+      // gets Bloom's cap (round 18), or the paid plan's cap (Bloom 5, Flourish 12, Infinity none).
       const dailyLimit = aiDailyLimit(user);
       if (!testingForAll && dailyLimit !== null) {
         const { used } = await aiUsedToday(req, user, recording._id);
         if (used >= dailyLimit) {
-          if (!isPaid(user)) {
+          // Round 18: the trial is Bloom, so it gets Bloom's daily message.
+          if (!isPaid(user) && !isOnAiTrial(user)) {
             return res.status(403).json({
               code: "UPGRADE_REQUIRED",
               reason: "TRIAL_DAILY_LIMIT",

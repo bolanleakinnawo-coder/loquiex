@@ -73,7 +73,7 @@ async function endIndividualPlan(userId, now = new Date()) {
 }
 
 async function hasActiveOwnPlan(userId, now = new Date()) {
-  const me = await User.findById(userId, { plan: 1, planExpiresAt: 1 }).lean();
+  const me = await User.findById(userId, { plan: 1, planExpiresAt: 1, planStartedAt: 1 }).lean();
   return ownPlanIdOf(me, now) !== "free";
 }
 

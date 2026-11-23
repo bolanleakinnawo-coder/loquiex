@@ -303,8 +303,13 @@ async function loadMember(userId) {
     profileImageUrl: 1,
     plan: 1,
     planExpiresAt: 1,
+    planStartedAt: 1,
     teamPlan: 1,
     teamPlanExpiresAt: 1,
+    // Round 18: the free trial gives Bloom's group practice.
+    createdAt: 1,
+    trialByChoice: 1,
+    aiTrialStartedAt: 1,
     timeZone: 1,
     groupMinutes: 1,
   });

@@ -40,7 +40,7 @@ const DEFAULTS = {
     when: "When they activate the trial",
     subject: "Your 3-day free trial has started",
     body:
-      "Hi {name},\n\nYour 3-day free trial is on. You get AI feedback on your practices until {date}.\n\nMake the most of it: practise every day and see exactly how you communicate.",
+      "Hi {name},\n\nYour 3-day free trial is on. You get everything in Loquiex Bloom until {date}.\n\nMake the most of it: practise every day and see exactly how you communicate.",
     button: { label: "Start practising", path: "/app/practice" },
   },
   trial_ending: {
@@ -254,6 +254,7 @@ async function paymentSucceeded(payment) {
     const user = await User.findById(payment.user, {
       plan: 1,
       planExpiresAt: 1,
+      planStartedAt: 1,
       teamPlan: 1,
       teamPlanExpiresAt: 1,
     }).lean();
@@ -297,6 +298,7 @@ async function runTimedEmails(now = new Date()) {
     emailLog: 1,
     plan: 1,
     planExpiresAt: 1,
+    planStartedAt: 1,
     teamPlan: 1,
     teamPlanExpiresAt: 1,
     createdAt: 1,

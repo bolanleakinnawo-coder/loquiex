@@ -6,7 +6,10 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { BookOpen, Sparkles, X } from "lucide-react";
-import { getPlan, getStoredUser, refreshPlanFromServer, syncPendingPayments } from "../../data/plans";
+import { PLANS, getPlan, getStoredUser, refreshPlanFromServer, syncPendingPayments } from "../../data/plans";
+
+const formatLongDate = (d) =>
+  new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
 import { PRODUCTS } from "../../data/learn";
 import { getSocket } from "../../lib/realtime";
 import "../../styles/GroupCall.css";
@@ -17,11 +20,20 @@ function noticeFor(applied) {
   const book = applied.find((p) => p.kind === "book");
   const plan = applied.find((p) => p.kind !== "book");
   if (plan) {
-    const name = getPlan(getStoredUser()).name;
+    // Round 18: a Team Admin's individual plan starts when the team plan ends.
+    const starts = plan.planStartsAt ? new Date(plan.planStartsAt) : null;
+    const waiting = starts && starts > new Date();
+    const name = waiting
+      ? PLANS.find((p) => p.id === plan.planId)?.name || "Your plan"
+      : getPlan(getStoredUser()).name;
     return {
       icon: Sparkles,
       title: "Payment received",
-      body: `${name} is now active on your account.`,
+      body: waiting
+        ? `${name} starts on ${formatLongDate(starts)}, when your team plan ends.`
+        : `${name} is now active on your account.`,
+      // The longer "starts on" line wraps instead of being cut off.
+      full: Boolean(waiting),
       action: "View plan",
       url: "/app/membership",
     };
@@ -82,7 +94,7 @@ export default function PaymentSync() {
     navigate(notice.url);
   };
   return (
-    <div className="callbar" role="status">
+    <div className={`callbar${notice.full ? " callbar--full" : ""}`} role="status">
       <Icon size={16} aria-hidden="true" />
       <button type="button" className="callbar-text" onClick={open}>
         <strong>{notice.title}</strong>

@@ -6,7 +6,8 @@ const Payment = require("../MODELS/Payment");
 const User = require("../MODELS/User");
 const paystack = require("./paystack");
 const LibraryItem = require("../MODELS/LibraryItem");
-const { ownPlanIdOf, addMonths } = require("../utils/plans");
+const { ownPlanIdOf, queuedPlanOf, addMonths } = require("../utils/plans");
+const Team = require("../MODELS/Team");
 const { PRODUCTS } = require("../utils/learn");
 const { TEAM_PLANS } = require("../utils/plans");
 const { applyTeamPayment } = require("./team");
@@ -241,14 +242,30 @@ async function applyToUser(payment) {
 
     const now = new Date();
     const current = ownPlanIdOf(user, now);
-    const extend = current === payment.planId;
+    // Round 18 (Sheriff): a Team Admin whose team plan is still running
+    // keeps it to the end; the individual plan starts when it ends.
+    const queued = queuedPlanOf(user, now);
+    let queueStart = null;
+    if (queued && queued.planId === payment.planId) {
+      queueStart = queued.startsAt;
+    } else if (current === "free") {
+      const team = await Team.findOne(
+        { admin: user._id, expiresAt: { $gt: now } },
+        { expiresAt: 1 },
+      ).lean();
+      if (team) queueStart = new Date(team.expiresAt);
+    }
+    const extend = current === payment.planId || Boolean(queued && queued.planId === payment.planId);
     const staleCredit =
       payment.creditMinor > 0 &&
       (current !== payment.upgradeFromPlanId ||
         new Date(user.planExpiresAt || 0).getTime() !==
           new Date(payment.upgradeFromExpiresAt || 0).getTime());
-    const startsAt = extend ? user.planStartedAt || now : now;
-    const expiresAt = addMonths(extend ? user.planExpiresAt : now, payment.months);
+    const startsAt = extend ? user.planStartedAt || now : queueStart || now;
+    const expiresAt = addMonths(
+      extend ? user.planExpiresAt : queueStart || now,
+      payment.months,
+    );
 
     const result = await User.updateOne(
       {

@@ -6,7 +6,11 @@ import {
   LockKeyhole,
   Sparkles,
 } from "lucide-react";
-import { PLANS, PRICES, formatMoney } from "../../data/plans";
+import { PLANS, PRICES, formatMoney, getStoredUser } from "../../data/plans";
+
+// Round 18 (Sheriff): a member whose paid plan has ended sees "Plan ended"
+// instead of the trial wording.
+const planEnded = () => Boolean(getStoredUser()?.subscription?.endedPlan);
 
 const BLOOM = PLANS.find((p) => p.id === "bloom");
 const BLOOM_PER_DAY = BLOOM?.limits.aiFeedbackPerDay ?? 5;
@@ -71,7 +75,11 @@ export function AiFeedbackMeter({ allowance, infoOpen, onToggleInfo }) {
         {locked ? (
           <span className="ai-meter-note">
             {/* Round 14: the free trial now starts only when chosen. */}
-            {allowance.trialAvailable ? "Trial not started" : "Trial ended"}
+            {allowance.trialAvailable
+              ? "Trial not started"
+              : planEnded()
+                ? "Plan ended"
+                : "Trial ended"}
           </span>
         ) : unlimited ? (
           <span className="ai-meter-note">
@@ -101,7 +109,7 @@ export function AiFeedbackInfo({ allowance }) {
   if (state === "locked" && allowance.trialAvailable) {
     text = `Start your 3-day free trial to get feedback, or choose a plan. Bloom gives you ${BLOOM_PER_DAY} a day.`;
   } else if (state === "locked") {
-    text = `Your 3-day free trial of feedback has ended. Bloom gives you ${BLOOM_PER_DAY} a day.`;
+    text = `Your 3-day free trial has ended. Bloom gives you ${BLOOM_PER_DAY} a day.`;
   } else if (limit === null) {
     text = "Your plan has unlimited feedback.";
   } else if (state === "trial") {
@@ -132,7 +140,7 @@ export function AiFeedbackNudge({ allowance }) {
     body = "Start it, or choose a plan.";
     cta = "Start free trial";
   } else if (state === "locked") {
-    title = "Your free feedback has ended.";
+    title = planEnded() ? "Your plan has ended." : "Your free feedback has ended.";
     body = `Unlock it with Bloom from ${BLOOM_PRICE} a month.`;
     cta = "Unlock";
   } else if (left === 0) {

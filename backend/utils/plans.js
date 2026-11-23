@@ -109,7 +109,22 @@ function ownPlanIdOf(user, now = new Date()) {
   if (!PLAN_LIMITS[id] || id === "free") return "free";
   const expires = user?.planExpiresAt ? new Date(user.planExpiresAt) : null;
   if (!expires || !(expires > now)) return "free";
+  // Round 18 (Sheriff): a plan bought while leading an active team starts
+  // when the team plan ends. Until then it doesn't count.
+  const starts = user?.planStartedAt ? new Date(user.planStartedAt) : null;
+  if (starts && starts > now) return "free";
   return id;
+}
+
+// Round 18: an individual plan waiting to start (bought by a Team Admin
+// while their team plan runs). { planId, startsAt, expiresAt } or null.
+function queuedPlanOf(user, now = new Date()) {
+  const id = user?.plan === "pro" ? "bloom" : user?.plan;
+  if (!PLAN_LIMITS[id] || id === "free") return null;
+  const starts = user?.planStartedAt ? new Date(user.planStartedAt) : null;
+  const expires = user?.planExpiresAt ? new Date(user.planExpiresAt) : null;
+  if (!starts || !expires || !(starts > now) || !(expires > starts)) return null;
+  return { planId: id, startsAt: starts, expiresAt: expires };
 }
 
 // The plan this member gets from a team, while the team's payment covers it.
@@ -137,8 +152,18 @@ function planFromTeam(user, now = new Date()) {
   return team !== "free" && PLAN_RANK[team] > PLAN_RANK[own];
 }
 
+// Round 18 (Sheriff): the 3-day free trial is 3 days of everything in
+// Loquiex Bloom. planIdOf() stays the PAID plan (emails, admin and billing
+// read it); allowances and features read accessPlanIdOf().
+const TRIAL_PLAN_ID = "bloom";
+function accessPlanIdOf(user, now = new Date()) {
+  const id = planIdOf(user, now);
+  if (id !== "free") return id;
+  return isOnAiTrial(user, now) ? TRIAL_PLAN_ID : "free";
+}
+
 function limitsFor(user) {
-  return PLAN_LIMITS[planIdOf(user)];
+  return PLAN_LIMITS[accessPlanIdOf(user)];
 }
 
 function hasGroupPractice(user) {
@@ -195,14 +220,37 @@ const AI_FEEDBACK_PER_DAY = { free: 0, bloom: 5, flourish: 12, infinity: null };
 // How many AI feedback sessions this member may have today:
 // a paid plan's daily cap, the trial's AI_TRIAL_PER_DAY, or 0.
 function aiDailyLimit(user, now = new Date()) {
-  const planId = planIdOf(user, now);
+  const planId = accessPlanIdOf(user, now);
   if (planId !== "free") return AI_FEEDBACK_PER_DAY[planId] ?? null;
-  return isOnAiTrial(user, now) ? AI_TRIAL_PER_DAY : 0;
+  return 0;
+}
+
+// Round 18 (Sheriff): the paid plan that ended most recently, for the
+// "plan has ended" banner. { planId, endedAt, fromTeam } or null.
+function endedPlanOf(user, now = new Date()) {
+  const ended = [];
+  const own = user?.plan === "pro" ? "bloom" : user?.plan;
+  if (PLAN_LIMITS[own] && own !== "free" && user?.planExpiresAt) {
+    const at = new Date(user.planExpiresAt);
+    // A plan ended to join a team isn't shown (the team plan replaced it).
+    if (at <= now && !user?.planEndedForTeamAt) ended.push({ planId: own, endedAt: at, fromTeam: false });
+  }
+  const team = user?.teamPlan;
+  if (PLAN_LIMITS[team] && team !== "free" && user?.teamPlanExpiresAt) {
+    const at = new Date(user.teamPlanExpiresAt);
+    if (at <= now) ended.push({ planId: team, endedAt: at, fromTeam: true });
+  }
+  ended.sort((a, b) => b.endedAt - a.endedAt);
+  return ended[0] || null;
 }
 
 // What the app shows on Manage Membership.
 function subscriptionOf(user, now = new Date()) {
-  return { ...subscriptionBase(user, now), ownPlan: ownPlanOf(user, now) };
+  return {
+    ...subscriptionBase(user, now),
+    ownPlan: ownPlanOf(user, now),
+    nextPlan: queuedPlanOf(user, now),
+  };
 }
 
 // The member's own individual plan while it's active (null otherwise).
@@ -233,6 +281,8 @@ function subscriptionBase(user, now = new Date()) {
       // Round 14: the member can still choose to start the free trial.
       aiTrialAvailable: canStartAiTrial(user),
       inTeam: Boolean(user?.team),
+      // Round 18: the paid plan that ended most recently (for the banner).
+      endedPlan: endedPlanOf(user, now),
     };
   }
   if (planFromTeam(user, now)) {
@@ -339,6 +389,7 @@ function checkoutQuote(user, planId, periodId, currency = "NGN", now = new Date(
 const PLAN_FIELDS = {
   plan: 1,
   planExpiresAt: 1,
+  planStartedAt: 1,
   teamPlan: 1,
   teamPlanExpiresAt: 1,
   createdAt: 1,
@@ -360,7 +411,10 @@ module.exports = {
   enabledCurrencies,
   priceMinorFor,
   planIdOf,
+  accessPlanIdOf,
+  TRIAL_PLAN_ID,
   ownPlanIdOf,
+  queuedPlanOf,
   teamPlanIdOf,
   planFromTeam,
   limitsFor,

@@ -241,7 +241,7 @@ export default function WrapUp({
           {outToday && (
             <p className="wrap-hint">
               {state === "trial"
-                ? `You've used today's ${allowance.limit} trial reviews. They reset at midnight, or get Bloom for ${BLOOM_PER_DAY} a day.`
+                ? `You've used today's ${allowance.limit} trial reviews. They reset at midnight.`
                 : "You've used today's reviews. Your allowance resets at midnight."}
             </p>
           )}

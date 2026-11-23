@@ -93,8 +93,13 @@ router.get("/usage", authMiddleware, async (req, res) => {
     const user = await User.findById(req.userId, {
       plan: 1,
       planExpiresAt: 1,
+      planStartedAt: 1,
       teamPlan: 1,
       teamPlanExpiresAt: 1,
+      // Round 18: the free trial gives Bloom's group practice.
+      createdAt: 1,
+      trialByChoice: 1,
+      aiTrialStartedAt: 1,
       timeZone: 1,
       groupMinutes: 1,
     });
@@ -194,8 +199,13 @@ router.post("/scheduled", authMiddleware, async (req, res) => {
       username: 1,
       plan: 1,
       planExpiresAt: 1,
+      planStartedAt: 1,
       teamPlan: 1,
       teamPlanExpiresAt: 1,
+      // Round 18: the free trial gives Bloom's group practice.
+      createdAt: 1,
+      trialByChoice: 1,
+      aiTrialStartedAt: 1,
     });
     if (!user) return res.status(404).json({ message: "User not found." });
     if (!hasGroupPractice(user))

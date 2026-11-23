@@ -2,13 +2,14 @@ const express = require("express");
 const bcrypt = require("bcrypt");
 const multer = require("multer");
 const { PutObjectCommand } = require("@aws-sdk/client-s3");
-const { randomUUID, randomBytes, createHash } = require("crypto");
+const { randomUUID, randomBytes, createHash, randomInt } = require("crypto");
 const User = require("../MODELS/User"); // adjust path/casing to match your actual folder
 const r2 = require("../config/r2");
 const rateLimit = require("express-rate-limit");
 const { planIdOf, subscriptionOf } = require("../utils/plans");
 const PasswordReset = require("../MODELS/PasswordReset");
 const EmailVerification = require("../MODELS/EmailVerification");
+const SignupCode = require("../MODELS/SignupCode");
 const { signToken, verifyToken } = require("../utils/authToken");
 const { disconnectUser } = require("../services/realtime");
 const { deleteAccount } = require("../services/accountDeletion");
@@ -18,6 +19,7 @@ const {
   passwordChangedEmail,
   accountDeletedEmail,
   verifyEmailEmail,
+  signupCodeEmail,
 } = require("../services/email");
 
 const router = express.Router();
@@ -187,6 +189,112 @@ const deleteLimiter = rateLimit({
 });
 
 // ---------- SIGNUP ----------
+// ---------- SIGN UP EMAIL CODE (round 18, Sheriff) ----------
+// Step 2 of sign up emails a 6-digit code; the next screen checks it. The
+// account can only be made with the sign-up token a correct code returns,
+// and it is made already verified.
+const CODE_MINUTES = 10;
+const CODE_MAX_TRIES = 5;
+const SIGNUP_TOKEN_HOURS = 2;
+
+const codeSendLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) =>
+    `signup-code|${clientIpOf(req)}|${String(req.body?.email || "").trim().toLowerCase()}`,
+  message: { message: "Too many codes sent. Please wait an hour and try again." },
+});
+
+const codeCheckLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => `signup-code-check|${clientIpOf(req)}`,
+  message: { message: "Too many tries. Please wait 15 minutes and try again." },
+});
+
+router.post("/signup/send-code", codeSendLimiter, async (req, res) => {
+  try {
+    const email = String(req.body?.email || "").trim().toLowerCase();
+    const name = String(req.body?.fullName || "").trim().slice(0, 80);
+    if (!EMAIL_REGEX.test(email)) {
+      return res.status(400).json({ message: "Please enter a valid email address." });
+    }
+    if (await User.exists({ email })) {
+      return res
+        .status(409)
+        .json({ message: "An account with this email already exists." });
+    }
+    const code = String(randomInt(0, 1000000)).padStart(6, "0");
+    await SignupCode.findOneAndUpdate(
+      { email },
+      {
+        $set: {
+          codeHash: hashToken(`${email}|${code}`),
+          attempts: 0,
+          verifiedTokenHash: "",
+          verifiedAt: null,
+          expiresAt: new Date(Date.now() + CODE_MINUTES * 60 * 1000),
+        },
+      },
+      { upsert: true },
+    );
+    const sent = await sendEmail({
+      to: email,
+      ...signupCodeEmail({ name, code, minutes: CODE_MINUTES }),
+    });
+    if (!sent && process.env.NODE_ENV === "production") {
+      return res.status(503).json({
+        message: "We couldn't send the code right now. Please try again in a moment.",
+      });
+    }
+    res.json({ sent: true, email });
+  } catch (err) {
+    console.error("Sign up code failed:", err);
+    res.status(503).json({
+      message: "We couldn't send the code right now. Please try again in a moment.",
+    });
+  }
+});
+
+router.post("/signup/verify-code", codeCheckLimiter, async (req, res) => {
+  try {
+    const email = String(req.body?.email || "").trim().toLowerCase();
+    const code = String(req.body?.code || "").replace(/\D/g, "");
+    const row = await SignupCode.findOne({ email });
+    if (!row || !row.codeHash || row.expiresAt <= new Date()) {
+      return res.status(400).json({
+        message: "This code has expired. Tap Resend code to get a new one.",
+      });
+    }
+    if (row.attempts >= CODE_MAX_TRIES) {
+      return res.status(400).json({
+        message: "Too many wrong tries. Tap Resend code to get a new one.",
+      });
+    }
+    if (code.length !== 6 || hashToken(`${email}|${code}`) !== row.codeHash) {
+      row.attempts += 1;
+      await row.save();
+      return res.status(400).json({
+        message: "That code isn't right. Check your email and try again.",
+      });
+    }
+    const signupToken = randomBytes(32).toString("base64url");
+    row.codeHash = "";
+    row.verifiedTokenHash = hashToken(signupToken);
+    row.verifiedAt = new Date();
+    row.expiresAt = new Date(Date.now() + SIGNUP_TOKEN_HOURS * 60 * 60 * 1000);
+    await row.save();
+    res.json({ verified: true, email, signupToken });
+  } catch (err) {
+    console.error("Sign up code check failed:", err);
+    res.status(503).json({ message: "Please try again in a moment." });
+  }
+});
+
 router.post("/signup", signupLimiter, handleProfilePhotoUpload, async (req, res) => {
   try {
     const {
@@ -261,6 +369,23 @@ router.post("/signup", signupLimiter, handleProfilePhotoUpload, async (req, res)
       return res.status(400).json({ message: "Validation failed.", errors });
     }
 
+    // Round 18: the email must have been verified with the code first.
+    const signupToken = String(req.body.signupToken || "");
+    const codeRow = signupToken
+      ? await SignupCode.findOne({
+          email: email.trim().toLowerCase(),
+          verifiedTokenHash: hashToken(signupToken),
+          verifiedAt: { $ne: null },
+          expiresAt: { $gt: new Date() },
+        })
+      : null;
+    if (!codeRow) {
+      return res.status(400).json({
+        code: "EMAIL_NOT_VERIFIED",
+        message: "Please verify your email first.",
+      });
+    }
+
     const existingEmail = await User.findOne({
       email: email.trim().toLowerCase(),
     });
@@ -321,17 +446,18 @@ router.post("/signup", signupLimiter, handleProfilePhotoUpload, async (req, res)
         marketingOptIn === "true" ? new Date() : null,
       // Round 14: the free trial starts only when the member chooses it.
       trialByChoice: true,
+      // Round 18: verified with the sign up code.
+      emailVerified: true,
+      emailVerifiedAt: new Date(),
     });
+    await SignupCode.deleteOne({ _id: codeRow._id }).catch(() => {});
 
     const token = generateToken(newUser);
     // Round 14: the automatic Welcome email.
     require("../services/autoEmails")
       .sendAutoEmail("welcome", newUser._id)
       .catch(() => {});
-    // Round 17: ask them to verify their email.
-    sendVerificationEmail(newUser).catch((e) =>
-      console.error("Verify email failed:", e.message),
-    );
+    // Round 18: no link needed, the code already verified the email.
 
     res.status(201).json({
       message: "Account created successfully!",

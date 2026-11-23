@@ -4,6 +4,7 @@ import { HELP_LAYER_1 } from "../data/help";
 import {
   fetchAiAllowance,
   fetchGroupUsage,
+  hasPlanFeatures,
   refreshPlanFromServer,
 } from "../data/plans";
 import DurationPicker from "../Components/practice/DurationPicker";
@@ -123,10 +124,18 @@ export default function Practice() {
   const [aiAllowance, setAiAllowance] = useState(null);
   const [aiInfoOpen, setAiInfoOpen] = useState(false);
 
+  // Round 18 (Sheriff): Research Mode and Yap Mode need a subscription.
+  // Free members see both cards with a lock and get an upgrade popup.
+  const [modesUnlocked, setModesUnlocked] = useState(() => hasPlanFeatures());
+  const [showModesLocked, setShowModesLocked] = useState(false);
+
   useEffect(() => {
     // Keep the plan and group minutes fresh (used by the Group Practice card).
     refreshPlanFromServer()
-      .then(fetchGroupUsage)
+      .then(() => {
+        setModesUnlocked(hasPlanFeatures());
+        return fetchGroupUsage();
+      })
       .catch(() => {});
     let alive = true;
     fetchAiAllowance().then((data) => alive && setAiAllowance(data));
@@ -277,6 +286,7 @@ export default function Practice() {
 
   // Yap Mode has no level: no prompt, no preparation, straight to speaking.
   const handleYapMode = () => {
+    if (!modesUnlocked) return setShowModesLocked(true);
     setView("yap");
   };
 
@@ -296,6 +306,7 @@ export default function Practice() {
   useEffect(() => () => clearTimeout(researchTimer.current), []);
 
   const handleResearchMode = () => {
+    if (!modesUnlocked) return setShowModesLocked(true);
     setView("research-intro");
     window.scrollTo(0, 0);
   };
@@ -760,6 +771,13 @@ export default function Practice() {
                       <Search size={18} strokeWidth={1.8} />
                     </div>
                     <h3 className="mode-card-title">Research Mode</h3>
+                    {!modesUnlocked && (
+                      <LockKeyhole
+                        size={14}
+                        className="mode-card-lock"
+                        aria-label="Locked"
+                      />
+                    )}
                   </div>
                   <p className="mode-card-desc">
                     Learn something new, then explain it.
@@ -772,6 +790,13 @@ export default function Practice() {
                       <MessageCircle size={18} strokeWidth={1.8} />
                     </div>
                     <h3 className="mode-card-title">Yap Mode</h3>
+                    {!modesUnlocked && (
+                      <LockKeyhole
+                        size={14}
+                        className="mode-card-lock"
+                        aria-label="Locked"
+                      />
+                    )}
                   </div>
                   <p className="mode-card-desc">No topic. Just you talking.</p>
                 </button>
@@ -807,6 +832,40 @@ export default function Practice() {
             </div>
           </div>
         </>
+      )}
+
+      {showModesLocked && (
+        <div
+          className="mode-locked-backdrop"
+          onClick={() => setShowModesLocked(false)}
+        >
+          <div
+            className="gpt-locked-card mode-locked-card"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="mode-locked-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <span className="gpt-locked-icon" aria-hidden="true">
+              <LockKeyhole size={20} />
+            </span>
+            <h3 className="gpt-locked-title" id="mode-locked-title">
+              Unlock more ways to practise.
+            </h3>
+            <p className="gpt-locked-text">
+              Research Mode and Yap Mode are available with a Loquiex
+              subscription. Upgrade to explore more ways to develop your
+              communication skills.
+            </p>
+            <button
+              type="button"
+              className="gpt-locked-button"
+              onClick={() => navigate("/app/membership")}
+            >
+              Upgrade your plan
+            </button>
+          </div>
+        </div>
       )}
 
       {showSpinSheet && (

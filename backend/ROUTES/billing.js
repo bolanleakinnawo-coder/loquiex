@@ -32,7 +32,9 @@ const {
   PRICES,
   enabledCurrencies,
   subscriptionOf,
+  queuedPlanOf,
   checkoutQuote,
+  PLAN_LIMITS,
 } = require("../utils/plans");
 const { trialStarted } = require("../services/autoEmails");
 
@@ -74,6 +76,7 @@ async function subscriptionFor(userId) {
     planStartedAt: 1,
     planPeriodId: 1,
     planCancelledAt: 1,
+    planEndedForTeamAt: 1,
     team: 1,
     teamPlan: 1,
     teamPlanStartedAt: 1,
@@ -96,11 +99,12 @@ function publicPayment(p) {
     currency: p.currency,
     paidAt: p.paidAt,
     planExpiresAt: p.planExpiresAt,
+    planStartsAt: p.planStartsAt || null,
     createdAt: p.createdAt,
   };
 }
 
-const QUOTE_FIELDS = { plan: 1, planExpiresAt: 1, planPeriodId: 1, email: 1 };
+const QUOTE_FIELDS = { plan: 1, planExpiresAt: 1, planStartedAt: 1, planPeriodId: 1, email: 1 };
 
 // Words for the app (amounts in whole naira / dollars).
 function publicQuote(q, currency) {
@@ -158,6 +162,19 @@ router.get("/quote", authMiddleware, async (req, res) => {
   }
 });
 
+// Round 18: shown when a Team Admin already has an individual plan waiting
+// for the team plan to end (Sheriff's OK, round 18).
+function QUEUED_PLAN_MESSAGE(waiting) {
+  const name = PLAN_LIMITS[waiting.planId]?.name || "Your plan";
+  const date = new Date(waiting.startsAt).toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    timeZone: "Africa/Lagos",
+  });
+  return `${name} already starts on ${date}, when your team plan ends. You can add more time to it, or choose another plan after it starts.`;
+}
+
 // POST /api/billing/checkout
 router.post("/checkout", authMiddleware, checkoutLimiter, async (req, res) => {
   if (!paystack.isConfigured()) return notConfigured(res);
@@ -182,6 +199,15 @@ router.post("/checkout", authMiddleware, checkoutLimiter, async (req, res) => {
       return res.status(400).json({ message: "Choose a plan and billing period." });
     if (quote.kind === "downgrade") {
       return res.status(409).json({ code: "DOWNGRADE_LATER", message: downgradeMessage(quote) });
+    }
+    // Round 18: one individual plan can wait for the team plan to end. More
+    // time on that same plan is fine; a different one has to wait.
+    const waiting = queuedPlanOf(user);
+    if (waiting && !TEAM_PLANS[planId] && waiting.planId !== planId) {
+      return res.status(409).json({
+        code: "PLAN_WAITING",
+        message: QUEUED_PLAN_MESSAGE(waiting),
+      });
     }
     if (quote.tooMuchCredit) {
       return res.status(409).json({
@@ -310,6 +336,7 @@ router.post("/sync", authMiddleware, verifyLimiter, async (req, res) => {
         amount: p.amountMinor / 100,
         currency: p.currency,
         planExpiresAt: p.planExpiresAt,
+        planStartsAt: p.planStartsAt || null,
       })),
       subscription: await subscriptionFor(req.userId),
     });

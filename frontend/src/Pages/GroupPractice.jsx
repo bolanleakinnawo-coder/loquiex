@@ -1368,6 +1368,18 @@ export function GroupPracticeStart() {
   const [prompt, setPrompt] = useState(() => getRandomPrompt(CATEGORIES[0].id));
   const [ownPrompt, setOwnPrompt] = useState("");
   const [isPrivate, setIsPrivate] = useState(teamMode);
+  // Round 18: "Team" under Who can join, for members of an active team.
+  const [teamPick, setTeamPick] = useState(false);
+  const [myTeam, setMyTeam] = useState(null);
+  useEffect(() => {
+    let alive = true;
+    getMyTeam()
+      .then((t) => alive && setMyTeam(t))
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
   // Seats the host's plan allows: Bloom 2, Flourish up to 6 (round 10).
   const seatCap = maxHostSeats() ?? 6;
   const seatChoices = SEAT_CHOICES.filter((n) => n <= seatCap);
@@ -1412,7 +1424,7 @@ export function GroupPracticeStart() {
       prompt: firstPrompt,
       private: teamMode || isPrivate,
       max: seats,
-      ...(teamMode ? { team: true } : {}),
+      ...(teamMode || teamPick ? { team: true } : {}),
     };
   };
 
@@ -1543,7 +1555,10 @@ export function GroupPracticeStart() {
             role="radio"
             aria-checked={!isPrivate}
             className="gpc-visibility-option"
-            onClick={() => setIsPrivate(false)}
+            onClick={() => {
+              setIsPrivate(false);
+              setTeamPick(false);
+            }}
           >
             <Globe size={18} aria-hidden="true" />
             <span>
@@ -1554,9 +1569,12 @@ export function GroupPracticeStart() {
           <button
             type="button"
             role="radio"
-            aria-checked={isPrivate}
+            aria-checked={isPrivate && !teamPick}
             className="gpc-visibility-option"
-            onClick={() => setIsPrivate(true)}
+            onClick={() => {
+              setIsPrivate(true);
+              setTeamPick(false);
+            }}
           >
             <LockKeyhole size={18} aria-hidden="true" />
             <span>
@@ -1564,6 +1582,27 @@ export function GroupPracticeStart() {
               <span>Hidden. Only people with your code can join.</span>
             </span>
           </button>
+          {myTeam?.active && (
+            <button
+              type="button"
+              role="radio"
+              aria-checked={teamPick}
+              className="gpc-visibility-option"
+              onClick={() => {
+                setIsPrivate(true);
+                setTeamPick(true);
+              }}
+            >
+              <Users size={18} aria-hidden="true" />
+              <span>
+                <strong>Team</strong>
+                <span>
+                  Private to your team. Your team members get a notification
+                  to join when you start.
+                </span>
+              </span>
+            </button>
+          )}
         </div>
 
           </>

@@ -45,6 +45,7 @@ const GROUP_BY_ID = Object.fromEntries(GROUPS.map((g) => [g.id, g]));
 const PLAN_FIELDS = {
   plan: 1,
   planExpiresAt: 1,
+  planStartedAt: 1,
   teamPlan: 1,
   teamPlanExpiresAt: 1,
   createdAt: 1,

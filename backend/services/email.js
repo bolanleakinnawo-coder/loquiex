@@ -103,27 +103,29 @@ function escapeHtml(value) {
   );
 }
 
+// Round 18 (Sheriff): every email reads like a normal written message:
+// the Loquiex logo, then plain text. No coloured boxes or buttons; a button
+// is a plain link. The wording of each email is unchanged.
+function logoUrl() {
+  const base = (process.env.APP_URL || "").trim().replace(/\/+$/, "");
+  return base ? `${base}/icons/app-icon-192.png` : "";
+}
+
 function layout({ heading, paragraphs, button, footer }) {
-  const body = paragraphs
-    .map(
-      (p) =>
-        `<p style="margin:0 0 16px;color:#a9a392;font-size:15px;line-height:1.6">${p}</p>`,
-    )
-    .join("");
-  const cta = button
-    ? `<p style="margin:24px 0"><a href="${escapeHtml(button.url)}" style="display:inline-block;padding:14px 26px;border-radius:999px;background:#646742;color:#f1ecde;font-size:15px;font-weight:600;text-decoration:none">${escapeHtml(button.label)}</a></p>
-       <p style="margin:0 0 16px;color:#6d6d6a;font-size:12px;line-height:1.5;word-break:break-all">Or paste this link into your browser:<br>${escapeHtml(button.url)}</p>`
+  const font = "font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.6";
+  const logo = logoUrl()
+    ? `<p style="margin:0 0 20px"><img src="${escapeHtml(logoUrl())}" width="56" height="56" alt="Loquiex" style="display:block;border:0;border-radius:12px"></p>`
     : "";
-  return `<!doctype html><html><body style="margin:0;padding:0;background:#0e0f11">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#0e0f11;padding:32px 16px">
-<tr><td align="center">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#131513;border:1px solid #30302a;border-radius:20px">
-<tr><td style="padding:32px 28px;font-family:Inter,system-ui,-apple-system,Segoe UI,Arial,sans-serif">
-<p style="margin:0 0 20px;color:#79774e;font-size:13px;font-weight:700;letter-spacing:.12em">LOQUIEX</p>
-<h1 style="margin:0 0 16px;color:#f1ecde;font-size:24px;line-height:1.25">${escapeHtml(heading)}</h1>
-${body}${cta}
-<p style="margin:24px 0 0;color:#6d6d6a;font-size:12px;line-height:1.5">${footer}</p>
-</td></tr></table></td></tr></table></body></html>`;
+  const body = paragraphs.map((p) => `<p style="margin:0 0 16px">${p}</p>`).join("");
+  const cta = button
+    ? `<p style="margin:0 0 16px"><a href="${escapeHtml(button.url)}">${escapeHtml(button.label)}</a></p>
+<p style="margin:0 0 16px;word-break:break-all">Or paste this link into your browser:<br>${escapeHtml(button.url)}</p>`
+    : "";
+  return `<!doctype html><html><body style="margin:0;padding:24px 16px;${font}">
+<div style="max-width:560px;${font}">
+${logo}<p style="margin:0 0 16px"><strong>${escapeHtml(heading)}</strong></p>
+${body}${cta}<p style="margin:16px 0 0">${footer}</p>
+</div></body></html>`;
 }
 
 function passwordResetEmail({ name, url, minutes }) {
@@ -155,7 +157,7 @@ function passwordChangedEmail({ name, appUrl }) {
         greeting,
         "The password for your Loquiex account was just changed, and every device was signed out.",
         resetUrl
-          ? `If this wasn't you, <a href="${escapeHtml(resetUrl)}" style="color:#f1ecde">reset your password now</a> and reply to this email.`
+          ? `If this wasn't you, <a href="${escapeHtml(resetUrl)}" >reset your password now</a> and reply to this email.`
           : "If this wasn't you, reset your password now and reply to this email.",
       ],
       footer: "This is a security notice about your account.",
@@ -201,6 +203,25 @@ function verifyEmailEmail({ name, url, hours }) {
   };
 }
 
+// Round 18: the 6-digit code sent during sign up.
+function signupCodeEmail({ name, code, minutes }) {
+  const greeting = name ? `Hi ${escapeHtml(name)},` : "Hi,";
+  return {
+    subject: `Your Loquiex code is ${code}`,
+    html: layout({
+      heading: "Verify your email",
+      paragraphs: [
+        greeting,
+        `Enter this code in Loquiex to verify your email. It expires in ${minutes} minutes.`,
+        `<strong style="font-size:24px">${escapeHtml(code)}</strong>`,
+      ],
+      footer:
+        "If you didn't start signing up for Loquiex, you can ignore this email.",
+    }),
+    text: `${name ? `Hi ${name},` : "Hi,"}\n\nEnter this code in Loquiex to verify your email. It expires in ${minutes} minutes:\n\n${code}\n\nIf you didn't start signing up for Loquiex, you can ignore this email.`,
+  };
+}
+
 // Team plans (round 10): an invitation from a Team Admin.
 function teamInviteEmail({ adminName, teamName, planName, url }) {
   const team = teamName || "a Loquiex team";
@@ -241,6 +262,7 @@ function adminTextEmail({ subject, body, button }) {
 }
 
 module.exports = {
+  signupCodeEmail,
   adminTextEmail,
   teamInviteEmail,
   sendEmail,

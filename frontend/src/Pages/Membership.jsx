@@ -174,6 +174,13 @@ export default function Membership() {
         ? REASONS[reason]()
         : REASONS[reason];
 
+  // Round 18: an individual plan waiting for the team plan to end.
+  const nextPlan = user?.subscription?.nextPlan || null;
+  const nextPlanName = nextPlan
+    ? PLANS.find((p) => p.id === nextPlan.planId)?.name || ""
+    : "";
+  const waitsForTeam =
+    !selectedIsTeam && teamAdmin && team?.active && team?.expiresAt;
   const own = ownActivePlan(user);
   const ownPlanId = own?.planId || null;
   const ownPlanName = PLANS.find((p) => p.id === ownPlanId)?.name || "";
@@ -402,6 +409,12 @@ export default function Membership() {
     const Icon =
       done.kind === "joined" ? Sparkles : done.kind === "failed" ? CircleAlert : LoaderCircle;
     const expires = done.payment?.planExpiresAt || getSubscription()?.expiresAt;
+    // Round 18: bought by a Team Admin, it starts when the team plan ends.
+    const waitStart =
+      done.payment?.planStartsAt && new Date(done.payment.planStartsAt) > new Date()
+        ? done.payment.planStartsAt
+        : null;
+    const waitName = PLANS.find((p) => p.id === done.payment?.planId)?.name || "Your plan";
     const title = {
       checking: "Confirming your payment",
       joined: `Welcome to ${done.plan?.name || "your new plan"}`,
@@ -414,7 +427,11 @@ export default function Membership() {
         done.payment
           ? `You paid ${formatMoney(done.payment.amount, done.payment.currency)}. `
           : ""
-      }Your plan is active${expires ? ` until ${formatDate(expires)}` : ""}.`,
+      }${
+        waitStart
+          ? `${waitName} starts on ${formatDate(waitStart)}, when your team plan ends.`
+          : `Your plan is active${expires ? ` until ${formatDate(expires)}` : ""}.`
+      }`,
       failed:
         "Nothing was charged and your plan hasn't changed. You can try again with another card or bank.",
       pending:
@@ -744,7 +761,9 @@ export default function Membership() {
                   ? `${selected.name} starts today and replaces ${ownPlanName}. ${upgradeQuote.credit > 0 ? `The ${unusedDays(upgradeQuote.daysLeft)} on ${ownPlanName} come off the price, and` : "A"} ${upgradeQuote.credit > 0 ? "a " : ""}fresh ${selectedPeriod.months === 1 ? "month" : `${selectedPeriod.months} months`} starts today.`
                   : isPaid && !fromTeam && ownPlanId
                     ? `${selected.name} starts today and replaces ${plan.name}.`
-                    : "Your plan starts as soon as the payment is confirmed."}{" "}
+                    : waitsForTeam
+                      ? `${selected.name} starts on ${formatDate(team.expiresAt)}, when your team plan ends. Until then you keep using ${team.planName}.`
+                      : "Your plan starts as soon as the payment is confirmed."}{" "}
           No automatic renewal: you choose when to pay again.
         </p>
         {payError && (
@@ -822,6 +841,14 @@ export default function Membership() {
               <div>
                 <dt>Active until</dt>
                 <dd>{sub?.expiresAt ? formatDate(sub.expiresAt) : "Loading…"}</dd>
+              </div>
+            )}
+            {nextPlan && nextPlanName && (
+              <div>
+                <dt>Next plan</dt>
+                <dd>
+                  {nextPlanName}, starts on {formatDate(nextPlan.startsAt)}
+                </dd>
               </div>
             )}
             {isPaid && (
