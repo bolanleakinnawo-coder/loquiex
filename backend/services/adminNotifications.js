@@ -270,8 +270,10 @@ async function deliver(doc) {
         // shows the app name, so no extra "Loquiex" title.
         const payload = {
           kind: "admin",
+          // Round 17: the phone shows `body` in full (see push-sw.js); the
+          // in-app notice shows `title` and wraps it.
           title: body,
-          body: "",
+          body,
           url: group?.url || "/app/home",
           action: "Open",
           tag: `admin-${doc._id}`,

@@ -6,7 +6,7 @@ import "./RegistrationNav.css";
 function RegistrationNav() {
   return (
     <nav className="registration-nav">
-      <Link to="/" className="registration-nav-logo">
+      <Link to="/app/home" className="registration-nav-logo">
         <img src={brandLogo} alt="Loquiex" />
       </Link>
 

@@ -8,6 +8,7 @@ const r2 = require("../config/r2");
 const rateLimit = require("express-rate-limit");
 const { planIdOf, subscriptionOf } = require("../utils/plans");
 const PasswordReset = require("../MODELS/PasswordReset");
+const EmailVerification = require("../MODELS/EmailVerification");
 const { signToken, verifyToken } = require("../utils/authToken");
 const { disconnectUser } = require("../services/realtime");
 const { deleteAccount } = require("../services/accountDeletion");
@@ -16,6 +17,7 @@ const {
   passwordResetEmail,
   passwordChangedEmail,
   accountDeletedEmail,
+  verifyEmailEmail,
 } = require("../services/email");
 
 const router = express.Router();
@@ -103,6 +105,47 @@ const isStrongPassword = (password) =>
 
 const appUrl = () => (process.env.APP_URL || "").trim().replace(/\/+$/, "");
 const hashToken = (token) => createHash("sha256").update(token).digest("hex");
+
+// ---------- EMAIL VERIFICATION (round 17) ----------
+const VERIFY_HOURS = 24;
+
+// Makes a fresh link (only the newest one works) and emails it.
+async function sendVerificationEmail(user) {
+  const base = appUrl();
+  if (!base) {
+    console.error("Verify email: APP_URL is not set, so no link can be made.");
+    return false;
+  }
+  await EmailVerification.deleteMany({ user: user._id });
+  const token = randomBytes(32).toString("base64url");
+  await EmailVerification.create({
+    user: user._id,
+    email: user.email,
+    tokenHash: hashToken(token),
+    expiresAt: new Date(Date.now() + VERIFY_HOURS * 60 * 60 * 1000),
+  });
+  const url = `${base}/verify-email?token=${token}`;
+  const mail = verifyEmailEmail({ name: user.fullName, url, hours: VERIFY_HOURS });
+  return sendEmail({ to: user.email, ...mail });
+}
+
+// 5 new links per hour per account, so nobody can flood an inbox.
+const verifyResendLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => `verify-resend|${req.user?._id || clientIpOf(req)}`,
+  message: { message: "Too many emails sent. Please wait an hour and try again." },
+});
+const verifyLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => `verify|${clientIpOf(req)}`,
+  message: { message: "Too many tries. Please wait 15 minutes and try again." },
+});
 const RESET_MINUTES = 30;
 const RESET_TOKEN_RE = /^[A-Za-z0-9_-]{43}$/;
 const clientIp = (req) => rateLimit.ipKeyGenerator(req.ip || "");
@@ -123,7 +166,7 @@ const forgotAccountLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: (req) =>
-    `forgot|${String(req.body?.identifier || req.body?.email || "").trim().toLowerCase()}`,
+    `forgot|${String(req.body?.email || req.body?.identifier || "").trim().toLowerCase()}`,
   message: { message: "Too many reset requests. Please wait an hour and try again." },
 });
 const resetLimiter = rateLimit({
@@ -285,6 +328,10 @@ router.post("/signup", signupLimiter, handleProfilePhotoUpload, async (req, res)
     require("../services/autoEmails")
       .sendAutoEmail("welcome", newUser._id)
       .catch(() => {});
+    // Round 17: ask them to verify their email.
+    sendVerificationEmail(newUser).catch((e) =>
+      console.error("Verify email failed:", e.message),
+    );
 
     res.status(201).json({
       message: "Account created successfully!",
@@ -294,6 +341,7 @@ router.post("/signup", signupLimiter, handleProfilePhotoUpload, async (req, res)
         fullName: newUser.fullName,
         username: newUser.displayUsername || newUser.username,
         email: newUser.email,
+        emailVerified: Boolean(newUser.emailVerified),
         profileImageUrl: newUser.profileImageUrl,
         createdAt: newUser.createdAt,
         plan: planIdOf(newUser),
@@ -368,6 +416,7 @@ router.post("/login", loginLimiter, async (req, res) => {
         fullName: user.fullName,
         username: user.displayUsername || user.username,
         email: user.email,
+        emailVerified: Boolean(user.emailVerified),
         profileImageUrl: user.profileImageUrl,
         createdAt: user.createdAt,
         plan: planIdOf(user),
@@ -452,7 +501,13 @@ router.put(
       req.user.fullName = fullName.trim();
       req.user.username = normalizedUsername;
       req.user.displayUsername = username.trim();
+      // Round 17: a new email has to be verified again.
+      const emailChanged = req.user.email !== normalizedEmail;
       req.user.email = normalizedEmail;
+      if (emailChanged) {
+        req.user.emailVerified = false;
+        req.user.emailVerifiedAt = null;
+      }
       if (req.file) {
         const extension = PROFILE_IMAGE_EXTENSIONS[req.file.mimetype];
         const key = `profiles/${randomUUID()}.${extension}`;
@@ -475,6 +530,11 @@ router.put(
         req.user.passwordChangedAt = new Date();
       }
       await req.user.save();
+      if (emailChanged) {
+        sendVerificationEmail(req.user).catch((e) =>
+          console.error("Verify email failed:", e.message),
+        );
+      }
       if (newPassword) {
         disconnectUser(String(req.user._id), "session:revoked", {});
         PasswordReset.deleteMany({ user: req.user._id }).catch(() => {});
@@ -492,6 +552,7 @@ router.put(
           fullName: req.user.fullName,
           username: req.user.displayUsername || req.user.username,
           email: req.user.email,
+          emailVerified: Boolean(req.user.emailVerified),
           profileImageUrl: req.user.profileImageUrl,
           createdAt: req.user.createdAt,
           plan: planIdOf(req.user),
@@ -512,23 +573,89 @@ router.put(
   },
 );
 
+// ---------- VERIFY EMAIL (round 17) ----------
+// Whether the signed-in member's email is verified (the app checks this to
+// show or hide the reminder).
+router.get("/email-status", authenticate, (req, res) => {
+  res.json({
+    email: req.user.email,
+    emailVerified: Boolean(req.user.emailVerified),
+  });
+});
+
+// Sends a new verification link to the signed-in member.
+router.post("/verify-email/resend", authenticate, verifyResendLimiter, async (req, res) => {
+  try {
+    if (req.user.emailVerified) {
+      return res.json({ emailVerified: true, message: "Your email is already verified." });
+    }
+    const sent = await sendVerificationEmail(req.user);
+    if (!sent) {
+      return res
+        .status(503)
+        .json({ message: "We couldn't send the email just now. Please try again later." });
+    }
+    res.json({ emailVerified: false, message: `We've sent a new link to ${req.user.email}.` });
+  } catch (err) {
+    console.error("Verify email resend failed:", err.message);
+    res.status(500).json({ message: "We couldn't send the email just now. Please try again." });
+  }
+});
+
+// The link in the email lands on /verify-email, which posts the token here.
+router.post("/verify-email", verifyLimiter, async (req, res) => {
+  const expired = {
+    message: "This link has expired or was already used. Log in and ask for a new one.",
+    code: "VERIFY_LINK_INVALID",
+  };
+  try {
+    const token = String(req.body?.token || "");
+    if (!RESET_TOKEN_RE.test(token)) return res.status(400).json(expired);
+    const row = await EmailVerification.findOne({
+      tokenHash: hashToken(token),
+      expiresAt: { $gt: new Date() },
+    });
+    if (!row) return res.status(400).json(expired);
+    const user = await User.findById(row.user);
+    // The link only counts for the email it was sent to.
+    if (!user || user.email !== row.email) {
+      await row.deleteOne().catch(() => {});
+      return res.status(400).json(expired);
+    }
+    if (!user.emailVerified) {
+      user.emailVerified = true;
+      user.emailVerifiedAt = new Date();
+      await user.save();
+    }
+    await EmailVerification.deleteMany({ user: user._id });
+    res.json({ emailVerified: true, email: user.email });
+  } catch (err) {
+    console.error("Verify email failed:", err.message);
+    res.status(500).json({ message: "Something went wrong. Please try again." });
+  }
+});
+
 // ---------- FORGOT PASSWORD ----------
 // Always answers the same way, whether or not the account exists, and does
 // the lookup and email after replying, so nobody can use it to find out
 // which emails have Loquiex accounts.
 const FORGOT_REPLY = {
   message:
-    "If an account matches what you entered, we've sent a link to reset your password. It expires in 30 minutes.",
+    "If an account matches that email, we've sent a link to reset your password. It expires in 30 minutes.",
 };
 
 async function sendResetLink(identifier, ip) {
   const value = identifier.trim();
-  const user = await User.findOne(
-    EMAIL_REGEX.test(value)
-      ? { email: value.toLowerCase() }
-      : { username: usernameLookup(value) },
-  ).select("fullName email");
+  // Round 17 (Sheriff): email only, and only to an email the member has
+  // verified, so a reset link never goes to an address nobody confirmed.
+  const user = await User.findOne({ email: value.toLowerCase() }).select(
+    "fullName email emailVerified",
+  );
   if (!user) return;
+  if (!user.emailVerified) {
+    console.log("Forgot password: email not verified yet, so no link was sent.");
+    return;
+  }
 
   const base = appUrl();
   if (!base) {
@@ -552,11 +679,12 @@ async function sendResetLink(identifier, ip) {
 }
 
 router.post("/forgot-password", forgotIpLimiter, forgotAccountLimiter, (req, res) => {
-  const identifier = String(req.body?.identifier || req.body?.email || "");
+  const identifier = String(req.body?.email || req.body?.identifier || "");
   if (!identifier.trim() || identifier.length > 254) {
-    return res
-      .status(400)
-      .json({ message: "Please enter your email address or username." });
+    return res.status(400).json({ message: "Please enter your email address." });
+  }
+  if (!EMAIL_REGEX.test(identifier.trim())) {
+    return res.status(400).json({ message: "Please enter a valid email address." });
   }
   res.json(FORGOT_REPLY);
   sendResetLink(identifier, req.ip || "").catch((err) =>

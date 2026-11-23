@@ -24,11 +24,14 @@ export default function LearnNotice() {
     navigate(notice.url || "/app/learn");
   };
   return (
-    <div className="callbar" role="status">
+    <div
+      className={`callbar${notice.kind === "admin" ? " callbar--full" : ""}`}
+      role="status"
+    >
       <BellRing size={16} aria-hidden="true" />
       <button type="button" className="callbar-text" onClick={open}>
         <strong>{notice.title}</strong>
-        <span>{notice.body}</span>
+        {notice.kind !== "admin" && <span>{notice.body}</span>}
       </button>
       <button type="button" className="callbar-return" onClick={open}>
         {notice.action || "Open"}

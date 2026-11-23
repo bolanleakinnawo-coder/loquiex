@@ -181,6 +181,26 @@ function accountDeletedEmail({ name }) {
   };
 }
 
+// Round 17: sent after sign up, and again when the member changes their email
+// or asks for a new link.
+function verifyEmailEmail({ name, url, hours }) {
+  const greeting = name ? `Hi ${escapeHtml(name)},` : "Hi,";
+  return {
+    subject: "Verify your Loquiex email",
+    html: layout({
+      heading: "Verify your email",
+      paragraphs: [
+        greeting,
+        `Please confirm this is your email so you can always get back into your Loquiex account, for example if you forget your password. This link expires in ${hours} hours.`,
+      ],
+      button: { label: "Verify my email", url },
+      footer:
+        "If you didn't create a Loquiex account, you can ignore this email.",
+    }),
+    text: `${name ? `Hi ${name},` : "Hi,"}\n\nPlease confirm this is your email so you can always get back into your Loquiex account, for example if you forget your password. This link expires in ${hours} hours:\n${url}\n\nIf you didn't create a Loquiex account, you can ignore this email.`,
+  };
+}
+
 // Team plans (round 10): an invitation from a Team Admin.
 function teamInviteEmail({ adminName, teamName, planName, url }) {
   const team = teamName || "a Loquiex team";
@@ -228,4 +248,5 @@ module.exports = {
   passwordResetEmail,
   passwordChangedEmail,
   accountDeletedEmail,
+  verifyEmailEmail,
 };

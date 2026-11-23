@@ -9,16 +9,20 @@ self.addEventListener("push", (event) => {
     data = { title: "Loquiex", body: event.data ? event.data.text() : "" };
   }
 
-  const title = data.title || "Loquiex";
+  // Round 17 (Sheriff): admin messages show in full. The message goes in the
+  // body, which phones let grow to several lines, instead of the one-line
+  // title, which phones cut off. No "Loquiex" title (round 15).
+  const isAdmin = data.kind === "admin";
+  const title = isAdmin ? "" : data.title || "Loquiex";
   const options = {
-    body: data.body || "",
+    body: isAdmin ? data.body || data.title || "" : data.body || "",
     icon: "/icons/app-icon-192.png",
     badge: "/icons/app-icon-192.png",
     tag: data.tag || "loquiex",
     renotify: true,
     data: { url: data.url || "/app/home" },
     actions:
-      data.kind === "group-scheduled" || data.kind === "learn"
+      data.kind === "group-scheduled" || data.kind === "learn" || isAdmin
         ? [{ action: "open", title: data.action || "Open Loquiex" }]
         : [
             { action: "open", title: data.action || "Practise today" },

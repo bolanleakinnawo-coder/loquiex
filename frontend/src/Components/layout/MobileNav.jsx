@@ -1,9 +1,11 @@
-import { Home, Target, Trophy, BookOpen, User } from "lucide-react";
+import { Home, Target, Trophy, BookOpen, User, Users } from "lucide-react";
 import { NavLink } from "react-router-dom";
 
 const navigation = [
   { name: "Home", path: "/app/home", icon: Home },
   { name: "Practice", path: "/app/practice", icon: Target },
+  // Round 17 (Sheriff): Home | Practice | Club | Learn | Profile.
+  { name: "Club", path: "/app/club", icon: Users },
   { name: "Learn", path: "/app/learn", icon: BookOpen },
 
   { name: "Profile", path: "/app/profile", icon: User },

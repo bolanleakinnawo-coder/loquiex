@@ -35,6 +35,16 @@ const userSchema = new mongoose.Schema(
       lowercase: true,
       match: [/^\S+@\S+\.\S+$/, "Invalid email address."],
     },
+    // Round 17: set once the member clicks the link in the verification
+    // email. Password reset links only go to a verified email.
+    emailVerified: {
+      type: Boolean,
+      default: false,
+    },
+    emailVerifiedAt: {
+      type: Date,
+      default: null,
+    },
     marketingOptIn: {
       type: Boolean,
       default: false,

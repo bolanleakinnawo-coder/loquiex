@@ -1,4 +1,4 @@
-import { Home, Target, Trophy, BookOpen, User, LogOut } from "lucide-react";
+import { Home, Target, Trophy, BookOpen, User, Users, LogOut } from "lucide-react";
 
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import brandLogo from "../../assets/brandlogo.PNG";
@@ -15,6 +15,12 @@ const navigation = [
     name: "Practice",
     path: "/app/practice",
     icon: Target,
+  },
+  // Round 17 (Sheriff): Home | Practice | Club | Learn | Profile.
+  {
+    name: "Club",
+    path: "/app/club",
+    icon: Users,
   },
   {
     name: "Learn",

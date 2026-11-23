@@ -94,7 +94,7 @@ export default function TeamJoin() {
             </span>
             <h1 className="mt-title">This invitation doesn&apos;t work</h1>
             <p className="mt-sub">{error}</p>
-            <button type="button" className="mt-outline" onClick={() => navigate("/")}>
+            <button type="button" className="mt-outline" onClick={() => navigate("/app/home")}>
               Go to Loquiex
             </button>
           </section>

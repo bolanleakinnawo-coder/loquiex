@@ -4330,3 +4330,36 @@
   border-radius: 0;
   background: none;
 }
+
+/* Round 17 (Sheriff): admin messages show in full in the app, wrapping onto
+   as many lines as they need instead of being cut off. */
+.callbar--full {
+  align-items: flex-start;
+}
+
+.callbar--full .callbar-text strong,
+.callbar--full .callbar-text span {
+  overflow: visible;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+/* Round 17: the verify-email reminder scrolls with the page (it isn't pinned
+   like the call bar), and on narrow phones the button drops under the text. */
+.callbar.verify-notice {
+  position: relative;
+  top: auto;
+  z-index: 1;
+  flex-wrap: wrap;
+}
+
+.verify-notice .callbar-text {
+  flex: 1 1 180px;
+}
+
+@media (max-width: 480px) {
+  .verify-notice .callbar-return {
+    order: 4;
+    margin-left: 26px;
+  }
+}

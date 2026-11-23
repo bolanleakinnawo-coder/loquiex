@@ -6,7 +6,7 @@ import axios from "axios";
 const API_URL = import.meta.env.VITE_API_URL;
 const RESEND_SECONDS = 60;
 
-// Step 1 of "Forgot password": ask for the email (or username) and send a
+// Step 1 of "Forgot password": ask for the email (round 17: email only) and send a
 // reset link. The server answers the same way whether or not the account
 // exists, so this page never says whether an email is registered.
 function ForgotPassword() {
@@ -30,12 +30,16 @@ function ForgotPassword() {
     setError("");
     const value = identifier.trim();
     if (!value) {
-      setError("Please enter your email address or username.");
+      setError("Please enter your email address.");
+      return;
+    }
+    if (!/^\S+@\S+\.\S+$/.test(value)) {
+      setError("Please enter a valid email address.");
       return;
     }
     setIsSubmitting(true);
     try {
-      await axios.post(`${API_URL}/user/forgot-password`, { identifier: value });
+      await axios.post(`${API_URL}/user/forgot-password`, { email: value });
       setSentTo(value);
       setCooldown(RESEND_SECONDS);
     } catch (err) {
@@ -97,19 +101,19 @@ function ForgotPassword() {
             <div className="registration-header">
               <h1>Forgot your password?</h1>
               <p>
-                Enter the email or username on your account and we'll email you
-                a link to choose a new one.
+                Enter the email on your account and we'll email you a link to
+                choose a new one.
               </p>
             </div>
             <form className="registration-form" onSubmit={send} noValidate>
               <div className="form-field">
-                <label htmlFor="identifier">Email or username</label>
+                <label htmlFor="identifier">Email</label>
                 <input
                   id="identifier"
-                  type="text"
+                  type="email"
                   inputMode="email"
-                  autoComplete="username"
-                  placeholder="Enter your email or username"
+                  autoComplete="email"
+                  placeholder="Enter your email"
                   value={identifier}
                   aria-invalid={Boolean(error)}
                   onChange={(e) => setIdentifier(e.target.value)}

@@ -2,11 +2,13 @@ import { lazy, Suspense } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 
 import LandingPage from "../Pages/LandingPage";
+import ComingSoon from "../Pages/ComingSoon";
 import AppLayout from "../Components/layout/AppLayout";
 import Home from "../Pages/Home";
 import Practice from "../Pages/Practice";
 import Challenges from "../Pages/Challenges";
 import Learn from "../Pages/Learn";
+import Club from "../Pages/Club";
 import Library from "../Pages/Library";
 import Profile from "../Pages/Profile";
 import AdminTestimonials from "../Pages/AdminTestimonials";
@@ -27,6 +29,7 @@ import Registration from "../Pages/Registration";
 import Login from "../Pages/Login";
 import ForgotPassword from "../Pages/ForgotPassword";
 import ResetPassword from "../Pages/ResetPassword";
+import VerifyEmail from "../Pages/VerifyEmail";
 import ProtectedRoute from "./ProtectedRoute";
 
 import PracticeSession from "../Pages/PracticeSession";
@@ -58,10 +61,9 @@ const BookReader = lazy(() => import("../Pages/BookReader"));
 export default function AppRoutes() {
   return (
     <Routes>
-      {/* The main link goes to the Home tab, as before (signed-out visitors
-          are sent to log in). The landing page is kept for later but nothing
-          links to it yet; it only shows at /landingpage. */}
-      <Route path="/" element={<Navigate to="/app/home" replace />} />
+      {/* Round 17 (Sheriff): loquiex.app shows the coming soon page. Other
+          pages still open directly (/login, /app/home, /landingpage, /admin). */}
+      <Route path="/" element={<ComingSoon />} />
       <Route path="/landingpage" element={<LandingPage />} />
       <Route path="/welcome" element={<WelcomeIntro />} /> {/* NEW */}
       <Route path="/register" element={<Registration />} />
@@ -71,6 +73,8 @@ export default function AppRoutes() {
       <Route path="/team/join/:code" element={<TeamJoin />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/reset-password" element={<ResetPassword />} />
+      {/* Round 17: the link in the "Verify your email" email. */}
+      <Route path="/verify-email" element={<VerifyEmail />} />
       <Route path="/admin" element={<AdminLayout />}>
         <Route index element={<AdminOverview />} />
         <Route path="testimonials" element={<AdminTestimonials />} />
@@ -100,6 +104,7 @@ export default function AppRoutes() {
           <Route path="challenges" element={<Challenges />} />
           <Route path="library" element={<Library />} />
           <Route path="profile" element={<Profile />} />
+          <Route path="club" element={<Club />} />
           <Route path="learn" element={<Learn />} />
           <Route
             path="learn/read/:bookId"

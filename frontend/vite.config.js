@@ -16,7 +16,9 @@ export default defineConfig({
         theme_color: "#131513",
         background_color: "#131513",
         display: "standalone",
-        start_url: "/",
+        // Round 17: "/" is the coming soon page, so the installed app opens
+        // straight into Loquiex.
+        start_url: "/app/home",
         scope: "/",
         icons: [
           {

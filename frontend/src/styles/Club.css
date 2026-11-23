@@ -1,0 +1,100 @@
+/* Round 17: Club tab ("We're opening soon!"). Home palette and the same
+   type scale as the Learn coming-soon card. */
+.club-page {
+  max-width: 1200px;
+  min-height: 100%;
+}
+
+.club-stage {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: calc(100dvh - 300px);
+}
+
+.club-card {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  max-width: 520px;
+  margin: 16px auto 24px;
+  padding: 28px 20px 26px;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  background: var(--bg-card);
+  text-align: center;
+}
+
+.club-card-icon {
+  color: var(--text-secondary);
+}
+
+.club-card-title {
+  margin: 4px 0 0;
+  color: var(--text-primary);
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.club-card-date {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 40px;
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: 0.01em;
+}
+
+.club-card-text {
+  max-width: 440px;
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+@media (max-width: 360px) {
+  .club-card {
+    padding: 24px 14px 22px;
+  }
+
+  .club-card-title {
+    font-size: 20px;
+  }
+
+  .club-card-date {
+    font-size: 34px;
+  }
+}
+
+/* Round 17: coming soon page at loquiex.app, same card as the Club tab. */
+.coming-soon-page {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  min-height: 100dvh;
+  padding: 32px 16px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+.coming-soon-logo {
+  display: block;
+  width: 140px;
+  max-width: 40vw;
+  height: auto;
+}
+
+.coming-soon-page .club-card {
+  margin: 0 auto;
+}

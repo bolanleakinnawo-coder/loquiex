@@ -389,9 +389,11 @@ function PracticeOptionPicker({ value, onChange, disabled }) {
         tabIndex={disabled ? -1 : undefined}
       >
         <span className="level-dropdown-trigger-text">
-          {/* Round 11 (Sheriff): no "OPTION" label, just the choice. */}
+          {/* Round 17 (Sheriff): small OPTION label before the choice, like
+              Solo's LEVEL, and "Choose your practice" to match Solo. */}
+          <span className="level-dropdown-label">OPTION</span>
           <span className="level-dropdown-title">
-            {chosen?.label || "Choose how you want to practise"}
+            {chosen?.label || "Choose your practice"}
           </span>
         </span>
         <ChevronDown
