@@ -82,7 +82,7 @@ export default function Profile({ user }) {
   const [deleteError, setDeleteError] = useState("");
   const [isDeleting, setIsDeleting] = useState(false);
   const [formData, setFormData] = useState({
-    fullName: storedUser?.fullName || "",
+    ...nameParts(storedUser),
     username: storedUser?.username || "",
     email: storedUser?.email || "",
     newPassword: "",
@@ -142,7 +142,7 @@ export default function Profile({ user }) {
   // Personal information and Privacy & security share one form state.
   const openForm = (nextView) => {
     setFormData({
-      fullName: profileUser?.fullName || "",
+      ...nameParts(profileUser),
       username: profileUser?.username || "",
       email: profileUser?.email || "",
       newPassword: "",
@@ -671,13 +671,9 @@ export default function Profile({ user }) {
         <form className="pf-panel pf-form" onSubmit={handleSave}>
           <p className="pf-panel-title">Basic information</p>
           {[
-            [
-              "fullName",
-              "Full name",
-              "text",
-              "name",
-              "Your full name, including surname.",
-            ],
+            // Round 19 (Sheriff): first name and surname, both required.
+            ["firstName", "First name", "text", "given-name", ""],
+            ["surname", "Surname", "text", "family-name", ""],
             [
               "username",
               "Username",
@@ -703,7 +699,7 @@ export default function Profile({ user }) {
                   setFormData({ ...formData, [field]: event.target.value })
                 }
               />
-              <span className="pf-field-hint">{hint}</span>
+              {hint && <span className="pf-field-hint">{hint}</span>}
             </label>
           ))}
           {passwordField(
@@ -1000,4 +996,14 @@ function getStoredUser() {
   } catch {
     return null;
   }
+}
+
+// Round 19: first name and surname for the Edit profile form. Accounts made
+// before round 19 only have a full name, so it is split at the first space.
+function nameParts(user) {
+  if (user?.firstName || user?.surname) {
+    return { firstName: user.firstName || "", surname: user.surname || "" };
+  }
+  const parts = String(user?.fullName || "").trim().split(/\s+/).filter(Boolean);
+  return { firstName: parts[0] || "", surname: parts.slice(1).join(" ") };
 }

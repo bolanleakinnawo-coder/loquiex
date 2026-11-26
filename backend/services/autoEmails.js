@@ -21,6 +21,7 @@
 //   payment_failed   Paystack reports a payment failed
 //   sub_expiring     3 days before the plan ends
 //   sub_expired      the plan has ended
+//   account_deleted  the member deleted their account (round 19)
 const User = require("../MODELS/User");
 const EmailTemplate = require("../MODELS/EmailTemplate");
 const { sendEmail, adminTextEmail, isConfigured } = require("./email");
@@ -98,6 +99,15 @@ const DEFAULTS = {
     body:
       "Hi {name},\n\nYour {plan} subscription ended on {date}, and your account is now on Loquiex Free. Renew any time to get everything back.",
     button: { label: "Renew", path: "/app/membership" },
+  },
+  // Round 19 (Sheriff): draft text; the admin can edit it.
+  account_deleted: {
+    label: "Account deleted",
+    when: "When they delete their account",
+    subject: "Your Loquiex account has been deleted",
+    body:
+      "Hi {name},\n\nYour Loquiex account, recordings, feedback and wins have been deleted, as you asked. You're welcome back any time.\n\nIf you didn't do this, reply to this email straight away so we can help.",
+    button: null,
   },
 };
 
@@ -217,6 +227,32 @@ async function sendAutoEmail(key, userOrId, values = {}, { onceKey } = {}) {
     console.error(`Email ${key} failed:`, err.message);
     return false;
   }
+}
+
+// Sends email `key` to an address with no saved account (the account was
+// just deleted), so there is no once-only log. Returns true when sent.
+async function sendAutoEmailTo(key, { email, name } = {}, values = {}) {
+  const d = DEFAULTS[key];
+  if (!d || !email || !isConfigured()) return false;
+  const row = await EmailTemplate.findOne({ key }).lean();
+  if (row && row.enabled === false) return false;
+  const first = String(name || "").trim().split(/\s+/)[0] || "there";
+  const all = { name: first, ...values };
+  const base = appUrl();
+  const mail = adminTextEmail({
+    subject: fill(row?.subject || d.subject, all),
+    body: fill(row?.body || d.body, all),
+    button: d.button && base ? { label: d.button.label, url: `${base}${d.button.path}` } : null,
+  });
+  const sent = await sendEmail({ to: email, ...mail });
+  if (sent) {
+    await EmailTemplate.updateOne(
+      { key },
+      { $inc: { sentCount: 1 }, $set: { lastSentAt: new Date() } },
+      { upsert: true },
+    );
+  }
+  return sent;
 }
 
 // ---- Payment emails (called from services/billing.js) ---------------------
@@ -376,6 +412,7 @@ module.exports = {
   listTemplates,
   saveTemplate,
   sendAutoEmail,
+  sendAutoEmailTo,
   paymentSucceeded,
   paymentFailed,
   trialStarted,

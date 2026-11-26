@@ -148,7 +148,7 @@ export function AiFeedbackNudge({ allowance }) {
     body = `Bloom gives you ${BLOOM_PER_DAY} a day, every day.`;
   } else {
     title = `Free trial: ${plural(trialDaysLeft, "day")} left.`;
-    body = `Keep your feedback going with Bloom, ${BLOOM_PER_DAY} a day.`;
+    body = "Don't let your progress stop when your trial ends.";
   }
 
   return (

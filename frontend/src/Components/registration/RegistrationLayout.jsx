@@ -29,7 +29,8 @@ function RegistrationLayout() {
   const location = useLocation();
 
   const [formData, setFormData] = useState({
-    fullName: "",
+    firstName: "",
+    surname: "",
     username: "",
     email: "",
     marketingOptIn: false,
@@ -57,7 +58,7 @@ function RegistrationLayout() {
     try {
       await axios.post(`${API_URL}/user/signup/send-code`, {
         email: typedEmail(),
-        fullName: formData.fullName.trim(),
+        fullName: `${formData.firstName.trim()} ${formData.surname.trim()}`.trim(),
       });
       return true;
     } catch (error) {
@@ -80,6 +81,21 @@ function RegistrationLayout() {
 
   // Step 2's Continue: skip the code if this email is already verified.
   const handleStepTwoNext = async () => {
+    // Round 19 (Sheriff): a taken username shows here, before they leave
+    // this page. If the check can't reach the server, sign up still checks.
+    try {
+      const { data } = await axios.post(`${API_URL}/user/signup/check-username`, {
+        username: formData.username.trim(),
+      });
+      if (data && data.available === false) {
+        setAccountError({
+          fields: { username: data.message || "This username is already taken." },
+        });
+        return;
+      }
+    } catch {
+      // Carry on; the final sign up step reports a taken username.
+    }
     if (verified.token && verified.email === typedEmail()) {
       nextStep();
       return;
@@ -198,6 +214,8 @@ function RegistrationLayout() {
       if (responseErrors.email) fieldErrors.email = responseErrors.email;
       if (responseErrors.username)
         fieldErrors.username = responseErrors.username;
+      if (responseErrors.firstName) fieldErrors.firstName = responseErrors.firstName;
+      if (responseErrors.surname) fieldErrors.surname = responseErrors.surname;
 
       if (Object.keys(fieldErrors).length > 0) {
         setAccountError({ fields: fieldErrors });

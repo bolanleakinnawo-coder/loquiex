@@ -253,3 +253,25 @@
     font-size: 12px;
   }
 }
+
+/* Round 19 (Sheriff): "Upgrade Your Plan" button on the Free card (Profile). */
+.mc-upgrade-btn {
+  position: relative;
+  display: inline-flex;
+  align-self: flex-start;
+  align-items: center;
+  gap: 6px;
+  margin-top: 12px;
+  padding: 9px 14px;
+  border-radius: 10px;
+  background: var(--olive-primary);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+  transition: background 0.2s ease;
+}
+
+.mc-card.is-button:hover .mc-upgrade-btn {
+  background: var(--olive-bright);
+}

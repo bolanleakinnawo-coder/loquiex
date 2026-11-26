@@ -4363,3 +4363,32 @@
     margin-left: 26px;
   }
 }
+
+/* Round 19 (Sheriff): on wider screens the people grid shrank to its
+   content when someone was alone in the call, cutting off "You" and
+   wrapping "Mic on". Keep it full width (up to 560px). */
+@media (min-width: 720px) {
+  .gpc-people {
+    width: 100%;
+  }
+}
+
+/* Round 19 (Sheriff): host's "End call for everyone" in the leave choice. */
+.gpc-modal-actions .gpc-secondary.gpc-end-all {
+  border-color: #5c2f2b;
+  background: #3a1f1d;
+  color: #f0b4ad;
+}
+
+.gpc-modal .gpc-leave-cancel {
+  align-self: center;
+}
+
+/* Round 19 (Sheriff): note about leaving the app during a call. */
+.gpc-stay-note {
+  margin: 4px 0 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.45;
+  text-align: center;
+}

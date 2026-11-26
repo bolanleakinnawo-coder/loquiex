@@ -142,6 +142,7 @@ export class GroupCall {
       audioBlocked: this.audioBlocked,
       hasMic: Boolean(this.localStream),
       isHost: this.room?.hostId === this.selfId,
+      awayNotice: Boolean(this.awayNotice),
     };
   }
 
@@ -348,9 +349,26 @@ export class GroupCall {
     const onVisible = async () => {
       if (document.visibilityState === "hidden") {
         this.hiddenAt = Date.now();
+        // Round 19 (Sheriff): notice if another app takes the microphone.
+        const t = this.localStream?.getAudioTracks()[0];
+        if (t && this.status === "live") {
+          const mark = () => {
+            this.micTaken = true;
+          };
+          t.addEventListener("mute", mark, { once: true });
+          t.addEventListener("ended", mark, { once: true });
+        }
         return;
       }
       if (this.status !== "live") return;
+      {
+        const t = this.localStream?.getAudioTracks()[0];
+        if (this.micTaken || (t && (t.readyState === "ended" || t.muted))) {
+          this.awayNotice = true;
+          this.emit();
+        }
+        this.micTaken = false;
+      }
       const hiddenFor = this.hiddenAt ? Date.now() - this.hiddenAt : 0;
       this.hiddenAt = null;
       this.keepAwake();
@@ -654,6 +672,18 @@ export class GroupCall {
     this.endReason = { code: reason, message: message || null };
     this.teardown();
     this.onChange(this.snapshot());
+  }
+
+  dismissAwayNotice() {
+    this.awayNotice = false;
+    this.emit();
+  }
+
+  // Round 19: the host ends the call for everyone.
+  endForAll() {
+    if (this.socket && this.status === "live") this.socket.emit("group:end-all");
+    this.closed = true;
+    this.teardown();
   }
 
   leave() {

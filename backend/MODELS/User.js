@@ -8,6 +8,10 @@ const userSchema = new mongoose.Schema(
       trim: true,
       minlength: 2,
     },
+    // Round 19 (Sheriff): first name and surname are asked for separately;
+    // fullName is "First Surname".
+    firstName: { type: String, trim: true, default: "" },
+    surname: { type: String, trim: true, default: "" },
     username: {
       type: String,
       required: true,

@@ -35,7 +35,7 @@
 //   group:signal           { from, data }
 //   group:usage            { total, left, usedThisMonth, usedToday }
 //   group:time-up
-//   group:ended            { reason }
+//   group:ended            { reason }  ("host-ended": the host ended the call)
 const crypto = require("crypto");
 const User = require("../MODELS/User");
 const ScheduledPractice = require("../MODELS/ScheduledPractice");
@@ -57,7 +57,8 @@ const MINUTE_MS = 60 * 1000;
 // network blip) keeps their seat this long, so they can come straight back.
 const AWAY_GRACE_MS = Math.max(
   10000,
-  Number(process.env.GROUP_AWAY_GRACE_MS) || 2 * 60 * 1000,
+  // Round 19 (Sheriff): 10 minutes (was 2).
+  Number(process.env.GROUP_AWAY_GRACE_MS) || 10 * 60 * 1000,
 );
 const LOBBY = "group:lobby";
 
@@ -300,6 +301,7 @@ async function loadMember(userId) {
   return User.findById(userId, {
     fullName: 1,
     username: 1,
+    displayUsername: 1,
     profileImageUrl: 1,
     plan: 1,
     planExpiresAt: 1,
@@ -348,7 +350,8 @@ function addToRoom(socket, room, user, summary) {
   const member = {
     userId,
     socketId: socket.id,
-    name: user.fullName || user.username || "Member",
+    // Round 19 (Sheriff): calls show the username, not the full name.
+    name: user.displayUsername || user.username || user.fullName || "Member",
     avatar: user.profileImageUrl || "",
     timeZone: user.timeZone || "",
     muted: false,
@@ -590,6 +593,21 @@ function registerGroupHandlers(socket) {
   socket.on("group:leave", (_payload, ack) => {
     const m = memberships.get(userId);
     if (m && m.socketId === socket.id) removeMember(userId);
+    if (typeof ack === "function") ack({ ok: true });
+  });
+
+  // Round 19 (Sheriff): the host can end the call for everyone.
+  socket.on("group:end-all", (_payload, ack) => {
+    const m = memberships.get(userId);
+    const room = m && m.socketId === socket.id ? rooms.get(m.roomId) : null;
+    if (!room || room.hostId !== userId) {
+      if (typeof ack === "function") ack({ ok: false });
+      return;
+    }
+    for (const other of [...room.members.keys()]) {
+      if (other !== userId) removeMember(other, { notifySelf: "host-ended" });
+    }
+    removeMember(userId);
     if (typeof ack === "function") ack({ ok: true });
   });
 

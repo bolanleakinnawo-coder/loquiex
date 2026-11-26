@@ -111,20 +111,24 @@ function logoUrl() {
   return base ? `${base}/icons/app-icon-192.png` : "";
 }
 
-function layout({ heading, paragraphs, button, footer }) {
+function layout({ heading, paragraphs, button, footer, pasteLink = false }) {
   const font = "font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.6";
   const logo = logoUrl()
     ? `<p style="margin:0 0 20px"><img src="${escapeHtml(logoUrl())}" width="56" height="56" alt="Loquiex" style="display:block;border:0;border-radius:12px"></p>`
     : "";
   const body = paragraphs.map((p) => `<p style="margin:0 0 16px">${p}</p>`).join("");
   const cta = button
-    ? `<p style="margin:0 0 16px"><a href="${escapeHtml(button.url)}">${escapeHtml(button.label)}</a></p>
+    ? `<p style="margin:0 0 16px"><a href="${escapeHtml(button.url)}">${escapeHtml(button.label)}</a></p>${
+        pasteLink
+          ? `
 <p style="margin:0 0 16px;word-break:break-all">Or paste this link into your browser:<br>${escapeHtml(button.url)}</p>`
+          : ""
+      }`
     : "";
   return `<!doctype html><html><body style="margin:0;padding:24px 16px;${font}">
 <div style="max-width:560px;${font}">
 ${logo}<p style="margin:0 0 16px"><strong>${escapeHtml(heading)}</strong></p>
-${body}${cta}<p style="margin:16px 0 0">${footer}</p>
+${body}${cta}${footer ? `<p style="margin:16px 0 0">${footer}</p>` : ""}
 </div></body></html>`;
 }
 
@@ -255,7 +259,9 @@ function adminTextEmail({ subject, body, button }) {
       heading: subject,
       paragraphs: paragraphs.map((p) => escapeHtml(p).replace(/\n/g, "<br>")),
       button,
-      footer: "You're getting this email because you have a Loquiex account.",
+      // Round 19 (Sheriff): no "Or paste this link" line and no footer line.
+      footer: "",
+      pasteLink: false,
     }),
     text: `${paragraphs.join("\n\n")}${button ? `\n\n${button.label}: ${button.url}` : ""}`,
   };

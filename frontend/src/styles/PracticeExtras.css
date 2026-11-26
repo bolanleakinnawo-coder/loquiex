@@ -796,3 +796,24 @@
 .mode-locked-card {
   position: static;
 }
+
+/* Round 19 (Sheriff): "Ready to practise with others?" card. Icon, texts
+   and button centred in the box. */
+.practice-others-card {
+  text-align: center;
+}
+
+.practice-others-head {
+  flex-direction: column;
+  align-items: center;
+}
+
+.practice-others-head > span:last-child {
+  align-items: center;
+}
+
+@media (max-width: 340px) {
+  .practice-others-btn {
+    text-align: center;
+  }
+}

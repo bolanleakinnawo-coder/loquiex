@@ -49,7 +49,7 @@ export const PLANS = [
     features: [
       "Spin the Jar, Yap Mode and Research Mode",
       "5 AI feedback sessions daily",
-      "Unlimited personal speaking practice, with or without AI feedback",
+      "Unlimited personal speaking practice without AI feedback",
       "Group Practice: 2 participants total, including the host",
       "45 minutes of Group Practice daily",
     ],
@@ -110,7 +110,7 @@ export const TEAM_PLANS = [
       "Up to 5 members, including the Team Admin",
       "Spin the Jar, Yap Mode and Research Mode",
       "5 AI feedback sessions per member daily",
-      "Unlimited personal speaking practice per member, with or without AI feedback",
+      "Unlimited personal speaking practice per member without AI feedback",
       "Group Practice: 2 participants total, including the host",
       "45 minutes of Group Practice daily per member",
       "Team member and invitation management",

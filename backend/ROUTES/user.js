@@ -26,6 +26,17 @@ const router = express.Router();
 
 const EMAIL_REGEX = /^\S+@\S+\.\S+$/;
 const USERNAME_REGEX = /^[a-zA-Z0-9_]{3,20}$/;
+// Round 19: first name and surname, letters only (spaces, ' and - allowed).
+const NAME_PART_REGEX = /^[a-zA-Z][a-zA-Z\s'-]*$/;
+function nameErrors(firstName, surname, errors) {
+  const first = String(firstName || "").trim();
+  const last = String(surname || "").trim();
+  if (!first) errors.firstName = "First name is required.";
+  else if (!NAME_PART_REGEX.test(first)) errors.firstName = "First name can only contain letters.";
+  if (!last) errors.surname = "Surname is required.";
+  else if (!NAME_PART_REGEX.test(last)) errors.surname = "Surname can only contain letters.";
+  return { first: first.slice(0, 40), last: last.slice(0, 40) };
+}
 const { normalizeUsername, usernameQuery } = require("../utils/usernames");
 // Indexed lookup (usernames are stored lowercase), not a full-collection scan.
 const usernameLookup = (username) => usernameQuery(username);
@@ -216,6 +227,33 @@ const codeCheckLimiter = rateLimit({
   message: { message: "Too many tries. Please wait 15 minutes and try again." },
 });
 
+// Round 19 (Sheriff): step 2 checks the username as soon as they tap
+// Continue, so a taken name shows on that page instead of at the end.
+const usernameCheckLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => `signup-username-check|${clientIpOf(req)}`,
+  message: { message: "Too many tries. Please wait 15 minutes and try again." },
+});
+
+router.post("/signup/check-username", usernameCheckLimiter, async (req, res) => {
+  try {
+    const username = String(req.body?.username || "").trim();
+    if (!username) return res.json({ available: false });
+    const taken = await User.exists({ username: usernameLookup(username) });
+    if (taken) {
+      return res.json({ available: false, message: "This username is already taken." });
+    }
+    res.json({ available: true });
+  } catch (err) {
+    console.error("Username check failed:", err);
+    // Sign up still checks the username at the end.
+    res.json({ available: true });
+  }
+});
+
 router.post("/signup/send-code", codeSendLimiter, async (req, res) => {
   try {
     const email = String(req.body?.email || "").trim().toLowerCase();
@@ -298,7 +336,8 @@ router.post("/signup/verify-code", codeCheckLimiter, async (req, res) => {
 router.post("/signup", signupLimiter, handleProfilePhotoUpload, async (req, res) => {
   try {
     const {
-      fullName,
+      firstName,
+      surname,
       username,
       email,
       marketingOptIn,
@@ -322,9 +361,8 @@ router.post("/signup", signupLimiter, handleProfilePhotoUpload, async (req, res)
 
     const errors = {};
 
-    if (!fullName || fullName.trim().length < 2) {
-      errors.fullName = "Full name must be at least 2 characters.";
-    }
+    const names = nameErrors(firstName, surname, errors);
+    const fullName = `${names.first} ${names.last}`.trim();
 
     if (!username || !USERNAME_REGEX.test(username.trim())) {
       errors.username =
@@ -428,6 +466,8 @@ router.post("/signup", signupLimiter, handleProfilePhotoUpload, async (req, res)
 
     const newUser = await User.create({
       fullName: fullName.trim(),
+      firstName: names.first,
+      surname: names.last,
       username: normalizedUsername,
       displayUsername: username.trim(),
       email: email.trim().toLowerCase(),
@@ -465,6 +505,8 @@ router.post("/signup", signupLimiter, handleProfilePhotoUpload, async (req, res)
       user: {
         id: newUser._id,
         fullName: newUser.fullName,
+        firstName: newUser.firstName || "",
+        surname: newUser.surname || "",
         username: newUser.displayUsername || newUser.username,
         email: newUser.email,
         emailVerified: Boolean(newUser.emailVerified),
@@ -540,6 +582,8 @@ router.post("/login", loginLimiter, async (req, res) => {
       user: {
         id: user._id,
         fullName: user.fullName,
+        firstName: user.firstName || "",
+        surname: user.surname || "",
         username: user.displayUsername || user.username,
         email: user.email,
         emailVerified: Boolean(user.emailVerified),
@@ -567,7 +611,8 @@ router.put(
   async (req, res) => {
     try {
       const {
-        fullName,
+        firstName,
+        surname,
         username,
         email,
         newPassword,
@@ -576,9 +621,7 @@ router.put(
       } = req.body;
       const errors = {};
 
-      if (!fullName || fullName.trim().length < 2) {
-        errors.fullName = "Full name must be at least 2 characters.";
-      }
+      const names = nameErrors(firstName, surname, errors);
       if (!username || !USERNAME_REGEX.test(username.trim())) {
         errors.username =
           "Username must be 3–20 characters (letters, numbers, underscores only).";
@@ -624,7 +667,9 @@ router.put(
           .json({ message: "That email or username is already in use." });
       }
 
-      req.user.fullName = fullName.trim();
+      req.user.firstName = names.first;
+      req.user.surname = names.last;
+      req.user.fullName = `${names.first} ${names.last}`.trim();
       req.user.username = normalizedUsername;
       req.user.displayUsername = username.trim();
       // Round 17: a new email has to be verified again.
@@ -676,6 +721,8 @@ router.put(
         user: {
           id: req.user._id,
           fullName: req.user.fullName,
+          firstName: req.user.firstName || "",
+          surname: req.user.surname || "",
           username: req.user.displayUsername || req.user.username,
           email: req.user.email,
           emailVerified: Boolean(req.user.emailVerified),
@@ -906,10 +953,11 @@ router.delete("/account", deleteLimiter, authenticate, async (req, res) => {
     const { fullName, email } = req.user;
     await deleteAccount(req.user);
 
-    const mail = accountDeletedEmail({ name: fullName });
-    sendEmail({ to: email, ...mail }).catch((e) =>
-      console.error("Account-deleted email failed:", e.message),
-    );
+    // Round 19 (Sheriff): now an automatic email in Admin > Emails
+    // (editable, can be switched off).
+    require("../services/autoEmails")
+      .sendAutoEmailTo("account_deleted", { email, name: fullName })
+      .catch((e) => console.error("Account-deleted email failed:", e.message));
 
     res.json({ message: "Your account has been deleted." });
   } catch (err) {

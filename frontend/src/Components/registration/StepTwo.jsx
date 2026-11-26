@@ -17,12 +17,17 @@ function StepTwo({
   const validate = () => {
     const newErrors = {};
 
-    if (!formData.fullName.trim()) {
-      newErrors.fullName = "Full name is required.";
-    } else if (formData.fullName.trim().length < 2) {
-      newErrors.fullName = "Full name must be at least 2 characters.";
-    } else if (!/^[a-zA-Z\s'-]+$/.test(formData.fullName.trim())) {
-      newErrors.fullName = "Full name can only contain letters.";
+    // Round 19 (Sheriff): first name and surname, both required.
+    if (!formData.firstName.trim()) {
+      newErrors.firstName = "First name is required.";
+    } else if (!/^[a-zA-Z][a-zA-Z\s'-]*$/.test(formData.firstName.trim())) {
+      newErrors.firstName = "First name can only contain letters.";
+    }
+
+    if (!formData.surname.trim()) {
+      newErrors.surname = "Surname is required.";
+    } else if (!/^[a-zA-Z][a-zA-Z\s'-]*$/.test(formData.surname.trim())) {
+      newErrors.surname = "Surname can only contain letters.";
     }
 
     if (!formData.username.trim()) {
@@ -89,18 +94,38 @@ function StepTwo({
           </p>
         )}
 
-        {/* Full Name */}
+        {/* First name */}
         <div className="form-field">
-          <label htmlFor="fullName">Full name</label>
+          <label htmlFor="firstName">First name</label>
           <input
-            id="fullName"
+            id="firstName"
             type="text"
-            placeholder="Enter your full name"
-            value={formData.fullName}
-            aria-invalid={Boolean(errors.fullName)}
-            onChange={handleChange("fullName")}
+            autoComplete="given-name"
+            placeholder="Enter your first name"
+            value={formData.firstName}
+            aria-invalid={Boolean(errors.firstName || serverErrors.firstName)}
+            onChange={handleChange("firstName")}
           />
-          {errors.fullName && <p className="form-error">{errors.fullName}</p>}
+          {(errors.firstName || serverErrors.firstName) && (
+            <p className="form-error">{errors.firstName || serverErrors.firstName}</p>
+          )}
+        </div>
+
+        {/* Surname */}
+        <div className="form-field">
+          <label htmlFor="surname">Surname</label>
+          <input
+            id="surname"
+            type="text"
+            autoComplete="family-name"
+            placeholder="Enter your surname"
+            value={formData.surname}
+            aria-invalid={Boolean(errors.surname || serverErrors.surname)}
+            onChange={handleChange("surname")}
+          />
+          {(errors.surname || serverErrors.surname) && (
+            <p className="form-error">{errors.surname || serverErrors.surname}</p>
+          )}
         </div>
 
         {/* Username */}

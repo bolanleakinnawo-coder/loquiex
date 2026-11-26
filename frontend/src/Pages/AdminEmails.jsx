@@ -18,6 +18,7 @@ const WORDS = {
   payment_failed: ["{name}", "{item}", "{amount}", "{reference}"],
   sub_expiring: ["{name}", "{plan}", "{date}"],
   sub_expired: ["{name}", "{plan}", "{date}"],
+  account_deleted: ["{name}"],
 };
 
 function EmailCard({ email, onSaved }) {

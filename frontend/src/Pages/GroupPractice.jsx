@@ -66,6 +66,7 @@ import {
   clearEndedCall,
   fetchScheduled,
   leaveCall,
+  endCallForAll,
   roomMeta,
   roomTitle,
   schedulePractice,
@@ -366,7 +367,9 @@ function callTimeDetail(usage) {
 }
 
 // "Practice option" picker, built like the Solo tab's level picker.
-function PracticeOptionPicker({ value, onChange, disabled }) {
+function PracticeOptionPicker({ value, onChange, disabled, inTeam }) {
+  // Round 19 (Sheriff): "Practice as a team" only for team members.
+  const options = PRACTICE_OPTIONS.filter((o) => inTeam || o.id !== "team");
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
   useEffect(() => {
@@ -377,7 +380,7 @@ function PracticeOptionPicker({ value, onChange, disabled }) {
     document.addEventListener("pointerdown", close);
     return () => document.removeEventListener("pointerdown", close);
   }, [open]);
-  const chosen = PRACTICE_OPTIONS.find((o) => o.id === value);
+  const chosen = options.find((o) => o.id === value);
   return (
     <div className="level-dropdown" ref={ref}>
       <button
@@ -404,7 +407,7 @@ function PracticeOptionPicker({ value, onChange, disabled }) {
       </button>
       {open && (
         <div className="level-dropdown-list" role="listbox">
-          {PRACTICE_OPTIONS.map((o, i) => (
+          {options.map((o, i) => (
             <button
               key={o.id}
               type="button"
@@ -588,6 +591,7 @@ const END_COPY = {
   "no-code": "No live call has that code.",
   "slow-down": "Too many wrong codes.",
   "joined-elsewhere": "You joined group practice on another device or tab.",
+  "host-ended": "The host ended the call.",
   "signed-out": "Please sign in again to join group practice.",
   timeout: "We couldn't reach the server.",
   error: "Something went wrong.",
@@ -1075,6 +1079,7 @@ export function GroupPracticeTab() {
             value={option}
             onChange={setOption}
             disabled={!allowed}
+            inTeam={inTeam}
           />
         </div>
         {allowed && (
@@ -2185,6 +2190,10 @@ export function GroupPracticeCall() {
     leaveCall();
     navigate(LOBBY);
   };
+  const endForAll = () => {
+    endCallForAll();
+    navigate(LOBBY);
+  };
   const backToLobby = () => {
     clearEndedCall();
     navigate(LOBBY);
@@ -2284,6 +2293,7 @@ export function GroupPracticeCall() {
       onDismiss={setDismissed}
       onBack={() => navigate(LOBBY)}
       onLeave={leave}
+      onEndForAll={endForAll}
     />
   );
 }
@@ -2394,8 +2404,10 @@ function CategorySwitch({ value, onChange, children, className = "" }) {
   );
 }
 
-function LiveCall({ call, session, dismissed, onDismiss, onBack, onLeave }) {
+function LiveCall({ call, session, dismissed, onDismiss, onBack, onLeave, onEndForAll }) {
   const { room, members, usage } = call;
+  // Round 19 (Sheriff): the host chooses to leave or end the call.
+  const [leaveChoice, setLeaveChoice] = useState(false);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
   const [micBusy, setMicBusy] = useState(false);
@@ -2665,6 +2677,12 @@ function LiveCall({ call, session, dismissed, onDismiss, onBack, onLeave }) {
         )}
       </section>
 
+      {/* Round 19 (Sheriff): short note about leaving the app. */}
+      <p className="gpc-stay-note">
+        You&apos;re on a practice call. If you leave Loquiex, people may not
+        hear you clearly or at all.
+      </p>
+
       <div className="gpc-controls">
         <button
           type="button"
@@ -2694,12 +2712,85 @@ function LiveCall({ call, session, dismissed, onDismiss, onBack, onLeave }) {
         <button
           type="button"
           className="gpc-control gpc-leave"
-          onClick={onLeave}
+          onClick={() => (call.isHost ? setLeaveChoice(true) : onLeave())}
         >
           <PhoneOff size={22} />
           <span>Leave</span>
         </button>
       </div>
+
+      {call.awayNotice && !leaveChoice && (
+        <div
+          className="gpc-modal-backdrop"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="gpc-away-title"
+        >
+          <div className="gpc-modal">
+            <h2 className="gpc-modal-title" id="gpc-away-title">
+              You&apos;re still on a practice call.
+            </h2>
+            <p className="gpc-modal-text">
+              People couldn&apos;t hear you while you were away.
+            </p>
+            <div className="gpc-modal-actions">
+              <button
+                type="button"
+                className="gpc-secondary"
+                onClick={() => session?.dismissAwayNotice()}
+              >
+                Stay
+              </button>
+              <button
+                type="button"
+                className="gpc-secondary gpc-end-all"
+                onClick={() => {
+                  session?.dismissAwayNotice();
+                  if (call.isHost) setLeaveChoice(true);
+                  else onLeave();
+                }}
+              >
+                Leave call
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {leaveChoice && (
+        <div
+          className="gpc-modal-backdrop"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="gpc-leave-title"
+          onClick={(e) => e.target === e.currentTarget && setLeaveChoice(false)}
+        >
+          <div className="gpc-modal">
+            <h2 className="gpc-modal-title" id="gpc-leave-title">
+              Leave call
+            </h2>
+            <div className="gpc-modal-actions">
+              <button type="button" className="gpc-secondary" onClick={onLeave}>
+                Leave call
+              </button>
+              <button
+                type="button"
+                className="gpc-secondary gpc-end-all"
+                onClick={onEndForAll}
+              >
+                End call for everyone
+              </button>
+            </div>
+            <button
+              type="button"
+              className="gpc-link gpc-leave-cancel"
+              onClick={() => setLeaveChoice(false)}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

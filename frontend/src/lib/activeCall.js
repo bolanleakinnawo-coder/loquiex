@@ -53,6 +53,13 @@ export function leaveCall() {
   publish(null);
 }
 
+// Round 19: the host ends the call for everyone.
+export function endCallForAll() {
+  session?.endForAll();
+  session = null;
+  publish(null);
+}
+
 // Clears a call that has already ended (after its "ended" screen is seen).
 export function clearEndedCall() {
   if (snapshot?.status === "ended") {

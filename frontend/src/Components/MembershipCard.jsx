@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Crown } from "lucide-react";
+import { ArrowRight, Crown } from "lucide-react";
 import {
   BILLING_PERIODS,
   aiTrialDaysLeft,
@@ -80,7 +80,7 @@ export default function MembershipCard({
       );
     }
   } else {
-    note = "Upgrade for AI feedback and group practice.";
+    note = "Unlock more ways to practise and improve with a paid plan.";
   }
 
   const Tag = onClick ? "button" : "section";
@@ -115,7 +115,18 @@ export default function MembershipCard({
           )}
         </>
       ) : (
-        <span className="mc-note">{note}</span>
+        <>
+          <span className="mc-note">{note}</span>
+          {/* Round 19 (Sheriff): button to the plans on the Profile card.
+              The whole card already opens Manage Membership, so this is a
+              span styled as a button (no button inside a button). */}
+          {onClick && (
+            <span className="mc-upgrade-btn">
+              Upgrade Your Plan
+              <ArrowRight size={14} strokeWidth={2.2} aria-hidden="true" />
+            </span>
+          )}
+        </>
       )}
     </Tag>
   );

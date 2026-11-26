@@ -1,7 +1,9 @@
 import { lazy, Suspense } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 
-import LandingPage from "../Pages/LandingPage";
+// The previous landing page (Pages/LandingPage.jsx) is kept but not routed
+// (Sheriff, 2026-11-26). "/landingpage" shows the new one.
+import NewLandingPage from "../Pages/NewLandingPage";
 import ComingSoon from "../Pages/ComingSoon";
 import AppLayout from "../Components/layout/AppLayout";
 import Home from "../Pages/Home";
@@ -64,7 +66,7 @@ export default function AppRoutes() {
       {/* Round 17 (Sheriff): loquiex.app shows the coming soon page. Other
           pages still open directly (/login, /app/home, /landingpage, /admin). */}
       <Route path="/" element={<ComingSoon />} />
-      <Route path="/landingpage" element={<LandingPage />} />
+      <Route path="/landingpage" element={<NewLandingPage />} />
       <Route path="/welcome" element={<WelcomeIntro />} /> {/* NEW */}
       <Route path="/register" element={<Registration />} />
       <Route path="/ready" element={<ReadyIntro />} /> {/* NEW */}

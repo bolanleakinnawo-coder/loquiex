@@ -172,7 +172,7 @@ export default function SubscriptionPicker({
         <p className="sp-sub">
           {team
             ? "Bring your friends, classmates or colleagues together to practise on Loquiex. One subscription gives your team access to its own individual accounts."
-            : "Choose a plan that suits your needs and enjoy unlimited personal speaking practice, with or without AI feedback."}
+            : "Choose a plan that suits your needs and enjoy unlimited personal speaking practice without AI feedback."}
         </p>
 
         {team && (
