@@ -9,12 +9,13 @@
 //   3. Made for your progress  (copied from the old landing page)
 //   4. Membership               (today's plans, no prices: Sheriff)
 //   5. FAQs                     (copied from the old landing page)
+//   6. Final call to action (centred) + footer, copied from the old page
 //
 // All wording is Sheriff's. Please don't reword it.
 
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowDown, Menu, Mic, X } from "lucide-react";
+import { ArrowDown, ArrowRight, Menu, Mic, X } from "lucide-react";
 
 import brandLogo from "../assets/landing/loquiex-logo.png";
 import journeyStep1 from "../assets/landing-new/journey-step-1.webp";
@@ -134,6 +135,15 @@ const FAQS = [
     q: "Can I change my membership plan?",
     a: "Plan changes are subject to the subscription and billing terms shown when you manage your membership.",
   },
+];
+
+// Footer links. Contact, Privacy policy and Terms and conditions: change the
+// addresses here when those pages exist (same as the old landing page).
+const FOOTER_SUPPORT = [
+  { label: "FAQs", href: "#faqs" },
+  { label: "Contact", href: "/app/help" },
+  { label: "Privacy policy", href: "#privacy-policy" },
+  { label: "Terms and conditions", href: "#terms-and-conditions" },
 ];
 
 // Signed in on this device? (Storage can be blocked in private mode.)
@@ -409,7 +419,57 @@ export default function NewLandingPage() {
             </div>
           </div>
         </section>
+
+        {/* ---------- Final call to action (old landing page) ---------- */}
+        <section className="lp-section lp-final nl-final">
+          <div className="lp-wrap lp-narrow">
+            <h2 className="lp-h2">Ready to give your voice room to grow?</h2>
+            <p className="lp-lead">
+              You have something to say. Start practising, find your words and
+              become more confident expressing yourself.
+            </p>
+            <Link className="lp-btn lp-btn-block" to={startTo}>
+              Create your free account
+            </Link>
+            <Link className="lp-more" to={signedIn ? "/app/home" : "/login"}>
+              Already a member? Log in <ArrowRight size={15} aria-hidden="true" />
+            </Link>
+          </div>
+        </section>
       </main>
+
+      {/* ---------- Footer (old landing page) ---------- */}
+      <footer className="lp-footer">
+        <div className="lp-wrap">
+          <div className="lp-footer-top">
+            <div>
+              <a href="#top" className="lp-logo" aria-label="Loquiex home">
+                <img src={brandLogo} alt="Loquiex" />
+              </a>
+              <p className="lp-small">Learn it. Practise it. Use it.</p>
+            </div>
+            <div className="lp-footer-cols">
+              <div>
+                <p className="lp-footer-title">Explore</p>
+                <a href="#platform">The platform</a>
+                <a href="#plans">Membership plans</a>
+                <Link to={signedIn ? "/app/home" : "/login"}>Dashboard</Link>
+              </div>
+              <div>
+                <p className="lp-footer-title">Support</p>
+                {FOOTER_SUPPORT.map((l) => (
+                  <a key={l.label} href={l.href}>
+                    {l.label}
+                  </a>
+                ))}
+              </div>
+            </div>
+          </div>
+          <p className="lp-footer-copy">
+            © {new Date().getFullYear()} Loquiex. All rights reserved.
+          </p>
+        </div>
+      </footer>
     </div>
   );
 }

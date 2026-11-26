@@ -459,3 +459,20 @@
     max-width: none;
   }
 }
+
+
+/* ---------- Final call to action: centred (Sheriff) ---------- */
+.nl-final {
+  text-align: center;
+}
+
+.nl-final .lp-btn-block {
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.nl-final .lp-more {
+  justify-content: center;
+  margin-left: auto;
+  margin-right: auto;
+}
