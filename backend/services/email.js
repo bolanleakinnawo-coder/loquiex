@@ -112,11 +112,20 @@ function escapeHtml(value) {
 const CTA_STYLE =
   "display:inline-block;background:#646742;color:#f1ecde;font-family:Arial,Helvetica,sans-serif;font-size:17px;font-weight:600;line-height:1.2;text-decoration:none;padding:13px 20px;border-radius:10px";
 
+const BUTTON_SPOT = "\u0000button\u0000";
+
 function layout({ paragraphs, button, footer, pasteLink = false }) {
   const font = "font-family:Arial,Helvetica,sans-serif;font-size:17px;line-height:1.6";
-  const body = paragraphs.map((p) => `<p style="margin:0 0 16px">${p}</p>`).join("");
-  const cta = button
-    ? `<p style="margin:8px 0 16px"><a href="${escapeHtml(button.url)}" style="${CTA_STYLE}">${escapeHtml(button.label)}</a></p>${
+  const buttonHtml = button
+    ? `<p style="margin:8px 0 16px"><a href="${escapeHtml(button.url)}" style="${CTA_STYLE}">${escapeHtml(button.label)}</a></p>`
+    : "";
+  // Round 24 (Sheriff): {button} in the text puts the button at that spot.
+  const placed = paragraphs.includes(BUTTON_SPOT);
+  const body = paragraphs
+    .map((p) => (p === BUTTON_SPOT ? buttonHtml : `<p style="margin:0 0 16px">${p}</p>`))
+    .join("");
+  const cta = button && !placed
+    ? `${buttonHtml}${
         pasteLink
           ? `
 <p style="margin:0 0 16px;word-break:break-all">Or paste this link into your browser:<br>${escapeHtml(button.url)}</p>`
@@ -240,20 +249,29 @@ function teamInviteEmail({ adminName, teamName, planName, url }) {
 // text; a blank line starts a new paragraph. An optional button links to
 // the app.
 function adminTextEmail({ subject, body, button }) {
+  // Round 24 (Sheriff): {button} marks where the button goes. Without it the
+  // button stays at the end. With no button set, {button} is just left out.
   const paragraphs = String(body || "")
+    .replace(/\{button\}/gi, "\n\n{button}\n\n")
     .split(/\n\s*\n/)
     .map((p) => p.trim())
+    .filter(Boolean);
+  const placed = paragraphs.some((p) => p.toLowerCase() === "{button}");
+  const textParts = paragraphs
+    .map((p) => (p.toLowerCase() === "{button}" ? (button ? `${button.label}: ${button.url}` : "") : p))
     .filter(Boolean);
   return {
     subject,
     html: layout({
-      paragraphs: paragraphs.map((p) => escapeHtml(p).replace(/\n/g, "<br>")),
+      paragraphs: paragraphs.map((p) =>
+        p.toLowerCase() === "{button}" ? BUTTON_SPOT : escapeHtml(p).replace(/\n/g, "<br>"),
+      ),
       button,
       // Round 19 (Sheriff): no "Or paste this link" line and no footer line.
       footer: "",
       pasteLink: false,
     }),
-    text: `${paragraphs.join("\n\n")}${button ? `\n\n${button.label}: ${button.url}` : ""}`,
+    text: `${textParts.join("\n\n")}${button && !placed ? `\n\n${button.label}: ${button.url}` : ""}`,
   };
 }
 

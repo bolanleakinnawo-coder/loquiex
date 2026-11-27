@@ -48,6 +48,7 @@ import {
   maxHostSeats,
   groupPracticePlanNames,
   hasGroupPractice,
+  canStartAiTrial,
   refreshPlanFromServer,
 } from "../data/plans";
 import { CATEGORIES, getRandomPrompt } from "../data/prompts";
@@ -1299,6 +1300,10 @@ export function GroupPracticeTab() {
 
   if (allowed) return lobby;
 
+  // Round 24 (Sheriff): members who haven't started their free trial are
+  // asked to start it or upgrade. Everyone else keeps the upgrade card.
+  const trialReady = canStartAiTrial();
+
   // Free and Bloom: the page is shown blurred behind an upgrade card.
   return (
     <div className="gpt-locked">
@@ -1315,7 +1320,9 @@ export function GroupPracticeTab() {
             <LockKeyhole size={20} />
           </span>
           <h3 className="gpt-locked-title" id="gpt-locked-title">
-            Upgrade your plan to practise with others
+            {trialReady
+              ? "Start your free trial or upgrade your plan to access group practice"
+              : "Upgrade your plan to practise with others"}
           </h3>
           <p className="gpt-locked-text">
             Group practice comes with{" "}
@@ -1324,9 +1331,18 @@ export function GroupPracticeTab() {
               .join(" or ")}
             .
           </p>
+          {trialReady && (
+            <button
+              type="button"
+              className="gpt-locked-button"
+              onClick={() => navigate("/app/membership")}
+            >
+              Start free trial
+            </button>
+          )}
           <button
             type="button"
-            className="gpt-locked-button"
+            className={`gpt-locked-button${trialReady ? " is-secondary" : ""}`}
             onClick={() =>
               navigate("/app/membership", { state: { reason: "group" } })
             }

@@ -93,6 +93,8 @@ function EmailCard({ email, onSaved }) {
             <textarea rows={7} maxLength={5000} value={body} onChange={(e) => setBody(e.target.value)} />
             <small>
               You can use {WORDS[email.key].join(", ")}. Leave a blank line to start a new paragraph.
+              {/* Round 24 (Sheriff) */}
+              {" "}Type {"{button}"} on its own line to place the button there; otherwise it goes at the end.
             </small>
           </label>
           <label className="adm-check">

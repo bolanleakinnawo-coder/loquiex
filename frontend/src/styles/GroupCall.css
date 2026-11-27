@@ -4392,3 +4392,15 @@
   line-height: 1.45;
   text-align: center;
 }
+
+/* Round 24 (Sheriff): "Upgrade your plan" under "Start free trial". */
+.gpt-locked-button.is-secondary {
+  margin-top: 10px;
+  background: transparent;
+  border: 1px solid var(--olive-primary);
+  color: var(--text-primary);
+}
+
+.gpt-locked-button.is-secondary:hover {
+  background: rgba(100, 103, 66, 0.18);
+}
