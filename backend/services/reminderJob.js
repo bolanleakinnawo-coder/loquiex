@@ -85,6 +85,37 @@ async function autoRemindersOn() {
   return String(process.env.AUTO_STREAK_REMINDERS || "").toLowerCase() === "on";
 }
 
+// Round 23 (Sheriff): the admin's own wording for each reminder.
+const TEXT_KEY = "streakReminderText";
+const { PUSH_DEFAULTS } = require("./streakNotices");
+
+async function reminderTexts() {
+  const row = await AppSetting.findOne({ key: TEXT_KEY }).lean();
+  const saved = row && typeof row.value === "object" && row.value ? row.value : {};
+  return Object.fromEntries(
+    Object.entries(PUSH_DEFAULTS).map(([kind, d]) => [
+      kind,
+      {
+        label: d.label,
+        title: saved[kind]?.title || d.title,
+        body: saved[kind]?.body || d.body,
+      },
+    ]),
+  );
+}
+
+async function saveReminderText(kind, { title, body }) {
+  if (!PUSH_DEFAULTS[kind]) return null;
+  const row = await AppSetting.findOne({ key: TEXT_KEY }).lean();
+  const value = { ...(row?.value || {}) };
+  value[kind] = {
+    title: String(title || "").trim().slice(0, 200),
+    body: String(body || "").trim().slice(0, 500),
+  };
+  await AppSetting.updateOne({ key: TEXT_KEY }, { $set: { value } }, { upsert: true });
+  return reminderTexts();
+}
+
 async function setAutoReminders(on) {
   await AppSetting.updateOne({ key: AUTO_KEY }, { $set: { value: Boolean(on) } }, { upsert: true });
   return autoRemindersOn();
@@ -95,6 +126,7 @@ async function runReminders(now = new Date()) {
     return { checked: 0, sent: 0, off: true };
   }
   if (!pushReady()) return { checked: 0, sent: 0 };
+  const texts = await reminderTexts();
   let checked = 0;
   let sent = 0;
 
@@ -116,7 +148,7 @@ async function runReminders(now = new Date()) {
       if (!(await claim(user._id, due.slot, status.today))) continue;
 
       const payload = {
-        ...pushPayloadFor(due.kind, status),
+        ...pushPayloadFor(due.kind, status, texts),
         kind: due.kind,
         tag: `streak-${due.kind}`,
       };
@@ -150,4 +182,12 @@ function startReminderJob() {
   setTimeout(tick, 30 * 1000); // first run shortly after start-up
 }
 
-module.exports = { startReminderJob, runReminders, dueReminder, autoRemindersOn, setAutoReminders };
+module.exports = {
+  startReminderJob,
+  runReminders,
+  dueReminder,
+  autoRemindersOn,
+  setAutoReminders,
+  reminderTexts,
+  saveReminderText,
+};

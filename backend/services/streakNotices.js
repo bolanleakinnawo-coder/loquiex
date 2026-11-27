@@ -39,42 +39,61 @@ function noticeKindFor(status, prefs = {}) {
   }
 }
 
-// Short text for a phone notification.
-function pushPayloadFor(kind, status) {
-  const n = status.current;
-  const url = "/app/practice";
-  switch (kind) {
-    case "keep":
-      return {
-        title: `${plural(n, "day")} of showing up. Let's keep it going.`,
-        body: "Complete today's practice to keep your streak alive.",
-        action: "Practise today",
-        url,
-      };
-    case "restore":
-      return {
-        title: "You can still save your streak.",
-        body: `Life happens. You have ${formatTimeLeft(status.restoreMsLeft)} left today to restore your ${n}-day streak.`,
-        action: "Restore my streak",
-        url,
-      };
-    case "comeback":
-      return {
-        title: "You're building a skill that stays with you.",
-        body: "Give yourself another opportunity to practise expressing your thoughts clearly.",
-        action: "Practise today",
-        url,
-      };
-    case "first":
-      return {
-        title: "Your first streak starts here.",
-        body: "One practice today. One step towards expressing yourself with confidence.",
-        action: "Start my streak",
-        url,
-      };
-    default:
-      return null;
-  }
+// Round 23 (Sheriff): the admin can edit the phone reminder wording in
+// Admin > Notifications. These are the starting texts. Words in curly
+// brackets are filled in for each member:
+//   {days}      their streak, e.g. "5 days"
+//   {streak}    their streak as a number, e.g. "5"
+//   {timeleft}  time left on their grace day, e.g. "3h 20m"
+const PUSH_DEFAULTS = {
+  keep: {
+    label: "Keep the streak (7:00 pm)",
+    title: "{days} of showing up. Let's keep it going.",
+    body: "Complete today's practice to keep your streak alive.",
+    action: "Practise today",
+  },
+  restore: {
+    label: "Grace day (9:00 am and 8:00 pm)",
+    title: "You can still save your streak.",
+    body: "Life happens. You have {timeleft} left today to restore your {streak}-day streak.",
+    action: "Restore my streak",
+  },
+  comeback: {
+    label: "Come back (6:00 pm, every day until they practise)",
+    title: "You're building a skill that stays with you.",
+    body: "Give yourself another opportunity to practise expressing your thoughts clearly.",
+    action: "Practise today",
+  },
+  first: {
+    label: "First streak (6:00 pm, new members)",
+    title: "Your first streak starts here.",
+    body: "One practice today. One step towards expressing yourself with confidence.",
+    action: "Start my streak",
+  },
+};
+
+function fillWords(text, status) {
+  const n = status?.current || 0;
+  const values = {
+    days: plural(n, "day"),
+    streak: String(n),
+    timeleft: formatTimeLeft(status?.restoreMsLeft || 0),
+  };
+  return String(text || "").replace(/\{(\w+)\}/g, (m, w) => (values[w] !== undefined ? values[w] : m));
 }
 
-module.exports = { noticeKindFor, pushPayloadFor, formatTimeLeft };
+// Short text for a phone notification. `custom` is the admin's saved
+// wording ({ keep: { title, body }, ... }); missing parts use the defaults.
+function pushPayloadFor(kind, status, custom = {}) {
+  const d = PUSH_DEFAULTS[kind];
+  if (!d) return null;
+  const saved = custom?.[kind] || {};
+  return {
+    title: fillWords(saved.title || d.title, status),
+    body: fillWords(saved.body || d.body, status),
+    action: d.action,
+    url: "/app/practice",
+  };
+}
+
+module.exports = { noticeKindFor, pushPayloadFor, formatTimeLeft, PUSH_DEFAULTS };

@@ -106,7 +106,43 @@ function AdminKeyGate({ onUnlock }) {
   );
 }
 
+// Round 23 (Sheriff): the admin pages have their own Home Screen app,
+// "Loquiex Admin", that opens straight into the admin dashboard. While an
+// admin page is open, the page points to the admin app details
+// (public/admin.webmanifest), so Add to Home Screen installs that one. The
+// normal Loquiex app is unchanged.
+function useAdminAppDetails() {
+  useEffect(() => {
+    const changed = [];
+    const swap = (selector, attr, value, create) => {
+      let el = document.head.querySelector(selector);
+      if (!el && create) {
+        el = create();
+        document.head.appendChild(el);
+        changed.push(() => el.remove());
+      } else if (el) {
+        const before = el.getAttribute(attr);
+        changed.push(() => el.setAttribute(attr, before));
+      }
+      el?.setAttribute(attr, value);
+    };
+    swap('link[rel="manifest"]', "href", "/admin.webmanifest", () => {
+      const link = document.createElement("link");
+      link.rel = "manifest";
+      return link;
+    });
+    swap('meta[name="apple-mobile-web-app-title"]', "content", "Loquiex Admin");
+    const title = document.title;
+    document.title = "Loquiex Admin";
+    return () => {
+      changed.forEach((undo) => undo());
+      document.title = title;
+    };
+  }, []);
+}
+
 export default function AdminLayout() {
+  useAdminAppDetails();
   const [unlocked, setUnlocked] = useState(() => Boolean(getAdminKey()));
 
   useEffect(() => {

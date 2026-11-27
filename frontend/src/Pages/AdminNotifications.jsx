@@ -28,6 +28,77 @@ function when(date) {
   });
 }
 
+// Round 23 (Sheriff): the ready-made streak reminders' wording is editable.
+function ReminderText({ kind, text, onSaved }) {
+  const [open, setOpen] = useState(false);
+  const [title, setTitle] = useState(text.title);
+  const [body, setBody] = useState(text.body);
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState("");
+  const changed = title !== text.title || body !== text.body;
+
+  const save = async () => {
+    setBusy(true);
+    setNote("");
+    try {
+      const { data } = await api.put(`/api/admin/notifications/auto-streak/text/${kind}`, { title, body });
+      onSaved(data.texts);
+      setNote("Saved.");
+    } catch (err) {
+      setNote(err.response?.data?.message || "Could not save it.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <li>
+      <span className="adm-history-icon" aria-hidden="true">
+        <BellRing size={16} />
+      </span>
+      <div className="adm-history-main">
+        <strong>{text.label}</strong>
+        {open ? (
+          <div className="adm-form">
+            <label className="adm-field">
+              <span>Title</span>
+              <input value={title} maxLength={200} onChange={(e) => setTitle(e.target.value)} />
+            </label>
+            <label className="adm-field">
+              <span>Text</span>
+              <textarea rows={3} maxLength={500} value={body} onChange={(e) => setBody(e.target.value)} />
+              <small>You can use {"{days}"}, {"{streak}"} and {"{timeleft}"}.</small>
+            </label>
+            <button
+              type="button"
+              className="adm-primary"
+              disabled={busy || !changed || !title.trim() || !body.trim()}
+              onClick={save}
+            >
+              {busy ? "Saving…" : "Save"}
+            </button>
+          </div>
+        ) : (
+          <>
+            <p>{text.title}</p>
+            <p>{text.body}</p>
+          </>
+        )}
+        {note && (
+          <p className="adm-note" role="status">
+            {note}
+          </p>
+        )}
+      </div>
+      <div className="adm-history-side">
+        <button type="button" className="adm-text-btn" onClick={() => setOpen((v) => !v)} aria-expanded={open}>
+          {open ? "Close" : "Edit"}
+        </button>
+      </div>
+    </li>
+  );
+}
+
 // Round 22 (Sheriff): automatic notifications. The admin writes a message,
 // picks a starting point and a time, and switches it on. Each member gets it
 // on their own timing (e.g. 24 hours after their own sign-up). Edits show
@@ -274,6 +345,7 @@ export default function AdminNotifications() {
   const [autoOn, setAutoOn] = useState(null);
   const [autoBusy, setAutoBusy] = useState(false);
   const [autoNote, setAutoNote] = useState("");
+  const [reminderTexts, setReminderTexts] = useState(null);
 
   const load = useCallback(() => {
     api
@@ -291,7 +363,10 @@ export default function AdminNotifications() {
   useEffect(() => {
     api
       .get("/api/admin/notifications/auto-streak")
-      .then((r) => setAutoOn(r.data.on))
+      .then((r) => {
+        setAutoOn(r.data.on);
+        setReminderTexts(r.data.texts || null);
+      })
       .catch(() => setAutoNote("Could not load the streak reminders setting."));
   }, []);
 
@@ -421,6 +496,13 @@ export default function AdminNotifications() {
           <p className="adm-note" role="status">
             {autoNote}
           </p>
+        )}
+        {reminderTexts && (
+          <ul className="adm-history">
+            {Object.entries(reminderTexts).map(([kind, text]) => (
+              <ReminderText key={kind} kind={kind} text={text} onSaved={setReminderTexts} />
+            ))}
+          </ul>
         )}
       </article>
 

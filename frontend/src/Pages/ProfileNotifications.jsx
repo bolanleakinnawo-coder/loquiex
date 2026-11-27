@@ -11,7 +11,6 @@ import {
   enablePush,
   setPushTurnedOff,
   getPushState,
-  sendTestPush,
 } from "../lib/push";
 
 const TYPES = {
@@ -156,7 +155,6 @@ const PUSH_NOTES = {
 function PhoneReminders() {
   const [state, setState] = useState("loading");
   const [busy, setBusy] = useState(false);
-  const [testNote, setTestNote] = useState("");
 
   const load = useCallback(() => {
     getPushState()
@@ -168,7 +166,6 @@ function PhoneReminders() {
 
   const toggle = async () => {
     setBusy(true);
-    setTestNote("");
     try {
       // Round 22: turning it off keeps it off on this device.
       const turningOff = state === "on";
@@ -178,20 +175,6 @@ function PhoneReminders() {
       setState("error");
     } finally {
       setBusy(false);
-    }
-  };
-
-  const test = async () => {
-    setTestNote("Sending…");
-    try {
-      const { data } = await sendTestPush();
-      setTestNote(
-        data.delivered
-          ? "Sent. It should arrive in a few seconds."
-          : "Couldn't reach this device. Try turning reminders off and on again.",
-      );
-    } catch {
-      setTestNote("Couldn't send a test right now.");
     }
   };
 
@@ -220,14 +203,6 @@ function PhoneReminders() {
           )}
         </label>
       </div>
-      {state === "on" && (
-        <p className="pf-panel-text pf-push-test">
-          <button className="pf-text-link" onClick={test}>
-            Send a test notification
-          </button>
-          {testNote && <span> {testNote}</span>}
-        </p>
-      )}
     </>
   );
 }

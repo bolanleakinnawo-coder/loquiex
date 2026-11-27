@@ -660,11 +660,29 @@ router.get("/notifications", async (_req, res) => {
 // GET/PUT /api/admin/notifications/auto-streak { on }
 router.get("/notifications/auto-streak", async (_req, res) => {
   try {
-    const { autoRemindersOn } = require("../services/reminderJob");
-    res.json({ on: await autoRemindersOn() });
+    const { autoRemindersOn, reminderTexts } = require("../services/reminderJob");
+    res.json({ on: await autoRemindersOn(), texts: await reminderTexts() });
   } catch (error) {
     console.error("Auto streak setting failed:", error);
     res.status(500).json({ message: "Could not load the setting." });
+  }
+});
+
+// Round 23 (Sheriff): edit one reminder's wording.
+// PUT /api/admin/notifications/auto-streak/text/:kind { title, body }
+router.put("/notifications/auto-streak/text/:kind", async (req, res) => {
+  const { title, body } = req.body || {};
+  if (!String(title || "").trim() || !String(body || "").trim()) {
+    return res.status(400).json({ message: "The title and text can't be empty." });
+  }
+  try {
+    const { saveReminderText } = require("../services/reminderJob");
+    const texts = await saveReminderText(req.params.kind, { title, body });
+    if (!texts) return res.status(404).json({ message: "Unknown reminder." });
+    res.json({ texts });
+  } catch (error) {
+    console.error("Save reminder text failed:", error);
+    res.status(500).json({ message: "Could not save it." });
   }
 });
 
