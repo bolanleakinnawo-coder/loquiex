@@ -86,10 +86,21 @@ const SESSION_ENDED_CODES = {
 };
 
 const ADMIN_KEY = "loquiex.adminKey";
+// Round 22 (Sheriff): admin login is remembered on this device for 30 days
+// instead of asking for the password every time. "Lock" or a wrong/changed
+// password on the server clears it straight away.
+const ADMIN_REMEMBER_MS = 30 * 24 * 60 * 60 * 1000;
 
 export function getAdminKey() {
   try {
-    return sessionStorage.getItem(ADMIN_KEY) || "";
+    const raw = localStorage.getItem(ADMIN_KEY);
+    if (!raw) return "";
+    const saved = JSON.parse(raw);
+    if (!saved?.key || !(saved.until > Date.now())) {
+      localStorage.removeItem(ADMIN_KEY);
+      return "";
+    }
+    return saved.key;
   } catch {
     return "";
   }
@@ -97,8 +108,13 @@ export function getAdminKey() {
 
 export function setAdminKey(value) {
   try {
-    if (value) sessionStorage.setItem(ADMIN_KEY, value);
-    else sessionStorage.removeItem(ADMIN_KEY);
+    sessionStorage.removeItem(ADMIN_KEY);
+    if (value) {
+      localStorage.setItem(
+        ADMIN_KEY,
+        JSON.stringify({ key: value, until: Date.now() + ADMIN_REMEMBER_MS }),
+      );
+    } else localStorage.removeItem(ADMIN_KEY);
   } catch {
     // Storage blocked: the key is asked for again.
   }

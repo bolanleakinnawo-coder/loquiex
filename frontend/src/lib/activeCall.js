@@ -75,6 +75,8 @@ export const callActions = {
   setHand: (v) => session?.setHand(v),
   setPrompt: (p, c) => session?.setPrompt(p, c),
   resumeAudio: () => session?.resumeAudio(),
+  // Round 21: the Stay / Leave call buttons on the "still on a practice call" popup.
+  dismissAwayNotice: () => session?.dismissAwayNotice(),
 };
 
 // ---- Practices planned for later (REST, see ROUTES/group.js) --------------

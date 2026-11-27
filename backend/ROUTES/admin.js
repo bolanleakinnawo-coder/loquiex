@@ -656,6 +656,96 @@ router.get("/notifications", async (_req, res) => {
   }
 });
 
+// Round 22 (Sheriff): automatic streak reminders switch.
+// GET/PUT /api/admin/notifications/auto-streak { on }
+router.get("/notifications/auto-streak", async (_req, res) => {
+  try {
+    const { autoRemindersOn } = require("../services/reminderJob");
+    res.json({ on: await autoRemindersOn() });
+  } catch (error) {
+    console.error("Auto streak setting failed:", error);
+    res.status(500).json({ message: "Could not load the setting." });
+  }
+});
+
+router.put("/notifications/auto-streak", async (req, res) => {
+  if (typeof req.body?.on !== "boolean") return res.status(400).json({ message: "Say on or off." });
+  try {
+    const { setAutoReminders } = require("../services/reminderJob");
+    res.json({ on: await setAutoReminders(req.body.on) });
+  } catch (error) {
+    console.error("Auto streak setting failed:", error);
+    res.status(500).json({ message: "Could not save the setting." });
+  }
+});
+
+// Round 22 (Sheriff): automatic notifications.
+// GET    /api/admin/notifications/auto        list + starting points
+// POST   /api/admin/notifications/auto        { message, trigger, amount, unit, enabled? }
+// PUT    /api/admin/notifications/auto/:id    any of those
+// DELETE /api/admin/notifications/auto/:id
+const AutoNotification = require("../MODELS/AutoNotification");
+const autoNotices = require("../services/autoNotifications");
+
+router.get("/notifications/auto", async (_req, res) => {
+  try {
+    const rules = await AutoNotification.find().sort({ createdAt: 1 }).lean();
+    res.json({
+      triggers: autoNotices.AUTO_TRIGGERS.map(({ id, label }) => ({ id, label })),
+      rules: rules.map(autoNotices.publicRule),
+    });
+  } catch (error) {
+    console.error("Automatic notifications failed:", error);
+    res.status(500).json({ message: "Could not load the automatic notifications." });
+  }
+});
+
+router.post("/notifications/auto", async (req, res) => {
+  const { value, error } = autoNotices.cleanRule(req.body);
+  if (error) return res.status(400).json({ message: error });
+  try {
+    const rule = await AutoNotification.create(value);
+    res.status(201).json({ rule: autoNotices.publicRule(rule.toObject()) });
+  } catch (err) {
+    console.error("Create automatic notification failed:", err);
+    res.status(500).json({ message: "Could not save it." });
+  }
+});
+
+router.put("/notifications/auto/:id", async (req, res) => {
+  if (!/^[a-f0-9]{24}$/i.test(req.params.id)) return res.status(404).json({ message: "Not found." });
+  try {
+    const current = await AutoNotification.findById(req.params.id, { trigger: 1 }).lean();
+    if (!current) return res.status(404).json({ message: "Not found." });
+    const { value, error } = autoNotices.cleanRule(
+      { ...req.body, currentTrigger: current.trigger },
+      { partial: true },
+    );
+    if (error) return res.status(400).json({ message: error });
+    const rule = await AutoNotification.findByIdAndUpdate(
+      req.params.id,
+      { $set: value },
+      { returnDocument: "after" },
+    ).lean();
+    if (!rule) return res.status(404).json({ message: "Not found." });
+    res.json({ rule: autoNotices.publicRule(rule) });
+  } catch (err) {
+    console.error("Update automatic notification failed:", err);
+    res.status(500).json({ message: "Could not save it." });
+  }
+});
+
+router.delete("/notifications/auto/:id", async (req, res) => {
+  try {
+    if (!/^[a-f0-9]{24}$/i.test(req.params.id)) return res.status(404).json({ message: "Not found." });
+    await AutoNotification.deleteOne({ _id: req.params.id });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("Delete automatic notification failed:", err);
+    res.status(500).json({ message: "Could not delete it." });
+  }
+});
+
 // GET /api/admin/notifications/count?group=… — how many members fit now.
 router.get("/notifications/count", async (req, res) => {
   const group = String(req.query.group || "");
@@ -729,10 +819,10 @@ router.get("/emails", async (_req, res) => {
   }
 });
 
-// PUT /api/admin/emails/:key { subject?, body?, enabled? }
+// PUT /api/admin/emails/:key { subject?, body?, enabled?, button?: { on, label, link } }
 router.put("/emails/:key", async (req, res) => {
   if (!EMAIL_KEYS.includes(req.params.key)) return res.status(404).json({ message: "Unknown email." });
-  const { subject, body, enabled } = req.body || {};
+  const { subject, body, enabled, button } = req.body || {};
   if (typeof subject === "string" && !subject.trim()) {
     return res.status(400).json({ message: "The subject can't be empty." });
   }
@@ -740,9 +830,10 @@ router.put("/emails/:key", async (req, res) => {
     return res.status(400).json({ message: "The text can't be empty." });
   }
   try {
-    const email = await saveTemplate(req.params.key, { subject, body, enabled });
+    const email = await saveTemplate(req.params.key, { subject, body, enabled, button });
     res.json({ email });
   } catch (error) {
+    if (error.status === 400) return res.status(400).json({ message: error.message });
     console.error("Save email failed:", error);
     res.status(500).json({ message: "Could not save the email." });
   }

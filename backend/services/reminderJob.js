@@ -6,12 +6,13 @@
 //   keep      19:00  streak going, not practised yet today
 //   restore   09:00  grace day starts (missed yesterday), with time left
 //             20:00  last call on the grace day, with time left
-//   comeback  18:00  3, 7, 14 and 30 days after the last practice, then monthly
+//   comeback  18:00  every day until they practise again (round 22)
 //   first     18:00  on sign-up day (if they joined over an hour ago) and
 //                    1, 3 and 7 days after joining, until the first practice
 // Each reminder goes out at most once per local day.
 const User = require("../MODELS/User");
 const Recording = require("../MODELS/Recording");
+const AppSetting = require("../MODELS/AppSetting");
 const {
   getStreakStatus,
   zonedParts,
@@ -26,7 +27,6 @@ const RUN_EVERY_MS = 15 * 60 * 1000;
 // doesn't make anyone miss the day's reminder.
 const SLOT_HOURS = 3;
 
-const COMEBACK_DAYS = [3, 7, 14, 30];
 const FIRST_STREAK_DAYS = [0, 1, 3, 7];
 
 function inSlot(hour, start) {
@@ -47,13 +47,9 @@ function dueReminder(user, status, now) {
     return null;
   }
 
-  if (kind === "comeback" && inSlot(hour, 18)) {
-    const d = status.daysSincePractice;
-    if (COMEBACK_DAYS.includes(d) || (d > 30 && d % 30 === 0)) {
-      return { kind, slot: "comeback" };
-    }
-    return null;
-  }
+  // Round 22 (Sheriff): members who stopped practising get the come-back
+  // reminder every day at 18:00 until they practise again.
+  if (kind === "comeback" && inSlot(hour, 18)) return { kind, slot: "comeback" };
 
   if (kind === "first" && inSlot(hour, 18)) {
     const joinedDay = localDayNumber(user.createdAt, status.timeZone);
@@ -77,12 +73,25 @@ async function claim(userId, slot, today) {
   return result.modifiedCount === 1;
 }
 
+// Round 14 (Sheriff): automatic streak reminders were turned off.
+// Round 22 (Sheriff): the admin switches them on or off in
+// Admin > Notifications. Until the switch is used, AUTO_STREAK_REMINDERS=on
+// on Render still turns them on.
+const AUTO_KEY = "autoStreakReminders";
+
+async function autoRemindersOn() {
+  const row = await AppSetting.findOne({ key: AUTO_KEY }).lean();
+  if (row && typeof row.value === "boolean") return row.value;
+  return String(process.env.AUTO_STREAK_REMINDERS || "").toLowerCase() === "on";
+}
+
+async function setAutoReminders(on) {
+  await AppSetting.updateOne({ key: AUTO_KEY }, { $set: { value: Boolean(on) } }, { upsert: true });
+  return autoRemindersOn();
+}
+
 async function runReminders(now = new Date()) {
-  // Round 14 (Sheriff): the admin sends all of these by hand from
-  // Admin > Notifications (inactivity, streak about to expire...), so the
-  // automatic streak reminders are off. AUTO_STREAK_REMINDERS=on on Render
-  // turns them back on.
-  if (String(process.env.AUTO_STREAK_REMINDERS || "").toLowerCase() !== "on") {
+  if (!(await autoRemindersOn())) {
     return { checked: 0, sent: 0, off: true };
   }
   if (!pushReady()) return { checked: 0, sent: 0 };
@@ -141,4 +150,4 @@ function startReminderJob() {
   setTimeout(tick, 30 * 1000); // first run shortly after start-up
 }
 
-module.exports = { startReminderJob, runReminders, dueReminder };
+module.exports = { startReminderJob, runReminders, dueReminder, autoRemindersOn, setAutoReminders };

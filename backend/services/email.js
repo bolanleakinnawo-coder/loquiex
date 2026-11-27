@@ -103,22 +103,20 @@ function escapeHtml(value) {
   );
 }
 
-// Round 18 (Sheriff): every email reads like a normal written message:
-// the Loquiex logo, then plain text. No coloured boxes or buttons; a button
-// is a plain link. The wording of each email is unchanged.
-function logoUrl() {
-  const base = (process.env.APP_URL || "").trim().replace(/\/+$/, "");
-  return base ? `${base}/icons/app-icon-192.png` : "";
-}
+// Round 18 (Sheriff): every email reads like a normal written message in
+// plain text. No coloured boxes.
+// Round 22 (Sheriff): no logo, the subject is not repeated at the top of
+// the email (it shows only as the subject), and buttons are brand CTAs.
+// Round 22 (Sheriff): emails use 17px text, and a button is the brand CTA
+// (the Home tab's olive button: #646742 with #f1ecde text).
+const CTA_STYLE =
+  "display:inline-block;background:#646742;color:#f1ecde;font-family:Arial,Helvetica,sans-serif;font-size:17px;font-weight:600;line-height:1.2;text-decoration:none;padding:13px 20px;border-radius:10px";
 
-function layout({ heading, paragraphs, button, footer, pasteLink = false }) {
-  const font = "font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.6";
-  const logo = logoUrl()
-    ? `<p style="margin:0 0 20px"><img src="${escapeHtml(logoUrl())}" width="56" height="56" alt="Loquiex" style="display:block;border:0;border-radius:12px"></p>`
-    : "";
+function layout({ paragraphs, button, footer, pasteLink = false }) {
+  const font = "font-family:Arial,Helvetica,sans-serif;font-size:17px;line-height:1.6";
   const body = paragraphs.map((p) => `<p style="margin:0 0 16px">${p}</p>`).join("");
   const cta = button
-    ? `<p style="margin:0 0 16px"><a href="${escapeHtml(button.url)}">${escapeHtml(button.label)}</a></p>${
+    ? `<p style="margin:8px 0 16px"><a href="${escapeHtml(button.url)}" style="${CTA_STYLE}">${escapeHtml(button.label)}</a></p>${
         pasteLink
           ? `
 <p style="margin:0 0 16px;word-break:break-all">Or paste this link into your browser:<br>${escapeHtml(button.url)}</p>`
@@ -127,7 +125,6 @@ function layout({ heading, paragraphs, button, footer, pasteLink = false }) {
     : "";
   return `<!doctype html><html><body style="margin:0;padding:24px 16px;${font}">
 <div style="max-width:560px;${font}">
-${logo}<p style="margin:0 0 16px"><strong>${escapeHtml(heading)}</strong></p>
 ${body}${cta}${footer ? `<p style="margin:16px 0 0">${footer}</p>` : ""}
 </div></body></html>`;
 }
@@ -137,7 +134,6 @@ function passwordResetEmail({ name, url, minutes }) {
   return {
     subject: "Reset your Loquiex password",
     html: layout({
-      heading: "Reset your password",
       paragraphs: [
         greeting,
         `We got a request to reset the password for your Loquiex account. This link works once and expires in ${minutes} minutes.`,
@@ -156,7 +152,6 @@ function passwordChangedEmail({ name, appUrl }) {
   return {
     subject: "Your Loquiex password was changed",
     html: layout({
-      heading: "Your password was changed",
       paragraphs: [
         greeting,
         "The password for your Loquiex account was just changed, and every device was signed out.",
@@ -175,7 +170,6 @@ function accountDeletedEmail({ name }) {
   return {
     subject: "Your Loquiex account has been deleted",
     html: layout({
-      heading: "Your account has been deleted",
       paragraphs: [
         greeting,
         "Your Loquiex account, recordings, feedback and wins have been deleted, as you asked. You're welcome back any time.",
@@ -194,7 +188,6 @@ function verifyEmailEmail({ name, url, hours }) {
   return {
     subject: "Verify your Loquiex email",
     html: layout({
-      heading: "Verify your email",
       paragraphs: [
         greeting,
         `Please confirm this is your email so you can always get back into your Loquiex account, for example if you forget your password. This link expires in ${hours} hours.`,
@@ -213,7 +206,6 @@ function signupCodeEmail({ name, code, minutes }) {
   return {
     subject: `Your Loquiex code is ${code}`,
     html: layout({
-      heading: "Verify your email",
       paragraphs: [
         greeting,
         `Enter this code in Loquiex to verify your email. It expires in ${minutes} minutes.`,
@@ -232,7 +224,6 @@ function teamInviteEmail({ adminName, teamName, planName, url }) {
   return {
     subject: `You've been invited to join ${team} on Loquiex`,
     html: layout({
-      heading: "You've been invited!",
       paragraphs: [
         `${escapeHtml(adminName || "Your Team Admin")} invited you to join ${escapeHtml(team)} on Loquiex.`,
         `Team plan: ${escapeHtml(planName)}. Your subscription cost is covered by the team.`,
@@ -256,7 +247,6 @@ function adminTextEmail({ subject, body, button }) {
   return {
     subject,
     html: layout({
-      heading: subject,
       paragraphs: paragraphs.map((p) => escapeHtml(p).replace(/\n/g, "<br>")),
       button,
       // Round 19 (Sheriff): no "Or paste this link" line and no footer line.

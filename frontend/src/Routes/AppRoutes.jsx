@@ -33,6 +33,7 @@ import ForgotPassword from "../Pages/ForgotPassword";
 import ResetPassword from "../Pages/ResetPassword";
 import VerifyEmail from "../Pages/VerifyEmail";
 import ProtectedRoute from "./ProtectedRoute";
+import NotFound from "../Pages/NotFound";
 
 import PracticeSession from "../Pages/PracticeSession";
 import WelcomeIntro from "../Pages/WelcomeIntro"; // NEW
@@ -141,6 +142,8 @@ export default function AppRoutes() {
           />
         </Route>
       </Route>
+      {/* Round 22 (Sheriff): a wrong address shows "Page not found". */}
+      <Route path="*" element={<NotFound />} />
     </Routes>
   );
 }

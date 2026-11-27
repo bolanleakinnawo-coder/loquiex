@@ -46,8 +46,9 @@ const ADMIN_GROUPS = [
 ];
 const ADMIN_SECTIONS = ADMIN_GROUPS.flatMap((g) => g.items);
 
-// The admin API needs the admin key (ADMIN_API_KEY on the server). It is kept
-// for this browser tab only and checked by the server on every request.
+// The admin API needs the admin key (ADMIN_API_KEY on the server). Round 22:
+// it is remembered on this device for 30 days and checked by the server on
+// every request.
 function AdminKeyGate({ onUnlock }) {
   const [value, setValue] = useState("");
   const [error, setError] = useState("");

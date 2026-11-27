@@ -126,6 +126,67 @@ export async function refreshPushSubscription() {
   }
 }
 
+// Round 22 (Sheriff): phone reminders are on by default. The member can
+// turn them off on Profile > Notifications, and then they stay off on this
+// device. The browser always asks "Allow notifications?" itself the first
+// time; it only lets an app ask straight after a tap, so we ask on the
+// member's first tap in the app (once per device). If they allowed it
+// before (e.g. before logging out), it turns back on without asking.
+const PUSH_OFF_KEY = "loquiex.pushOff";
+const PUSH_ASKED_KEY = "loquiex.pushAsked";
+
+function readFlag(key) {
+  try {
+    return localStorage.getItem(key) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function writeFlag(key, on) {
+  try {
+    if (on) localStorage.setItem(key, "1");
+    else localStorage.removeItem(key);
+  } catch {
+    // Storage blocked: nothing to remember.
+  }
+}
+
+export function setPushTurnedOff(off) {
+  writeFlag(PUSH_OFF_KEY, off);
+}
+
+let autoStarted = false;
+export async function autoEnablePush() {
+  if (autoStarted) return;
+  autoStarted = true;
+  if (readFlag(PUSH_OFF_KEY)) return;
+  let state;
+  try {
+    state = await getPushState();
+  } catch {
+    return;
+  }
+  if (state === "on") {
+    refreshPushSubscription();
+    return;
+  }
+  if (state !== "off") return;
+  if (Notification.permission === "granted") {
+    enablePush().catch(() => {});
+    return;
+  }
+  if (Notification.permission !== "default" || readFlag(PUSH_ASKED_KEY)) return;
+  const onFirstTap = () => {
+    document.removeEventListener("click", onFirstTap, true);
+    if (readFlag(PUSH_OFF_KEY)) return;
+    writeFlag(PUSH_ASKED_KEY, true);
+    // Asked inside the tap, before anything else is awaited (Safari).
+    enablePush().catch(() => {});
+  };
+  document.addEventListener("click", onFirstTap, true);
+}
+
 export function sendTestPush() {
   return api.post("/api/push/test");
 }

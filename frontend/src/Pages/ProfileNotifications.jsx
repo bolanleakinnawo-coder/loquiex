@@ -2,7 +2,6 @@ import { useCallback, useEffect, useState } from "react";
 import {
   ArrowLeft,
   BookOpen,
-  CircleCheck,
   Megaphone,
   Sparkles,
 } from "lucide-react";
@@ -10,6 +9,7 @@ import api from "../api/axios";
 import {
   disablePush,
   enablePush,
+  setPushTurnedOff,
   getPushState,
   sendTestPush,
 } from "../lib/push";
@@ -24,8 +24,8 @@ const READ_KEY = "loquiex.readNotifications";
 
 // Notifications page: updates, announcements and news from Loquiex.
 // Reads GET /api/notifications → [{ _id, type, title, body, createdAt }].
-// Until that feed exists (or while it's empty) the page shows
-// "You're all caught up". Read/unread is remembered on this device.
+// While it's empty nothing shows above Phone reminders.
+// Read/unread is remembered on this device.
 export default function ProfileNotifications({ prefs, onTogglePref, onBack }) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -105,15 +105,6 @@ export default function ProfileNotifications({ prefs, onTogglePref, onBack }) {
             );
           })}
 
-          <div className="pf-caught-up">
-            <CircleCheck size={28} />
-            <p>You&apos;re all caught up.</p>
-            {sorted.length === 0 && (
-              <span>
-                New updates and announcements from Loquiex will appear here.
-              </span>
-            )}
-          </div>
         </>
       )}
 
@@ -179,7 +170,10 @@ function PhoneReminders() {
     setBusy(true);
     setTestNote("");
     try {
-      setState(state === "on" ? await disablePush() : await enablePush());
+      // Round 22: turning it off keeps it off on this device.
+      const turningOff = state === "on";
+      setPushTurnedOff(turningOff);
+      setState(turningOff ? await disablePush() : await enablePush());
     } catch {
       setState("error");
     } finally {

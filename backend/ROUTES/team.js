@@ -31,7 +31,8 @@ const {
 } = require("../services/team");
 const { TEAM_MAX_MEMBERS, PLAN_LIMITS, PRICES } = require("../utils/plans");
 const { verifyToken } = require("../utils/authToken");
-const { sendEmail, isConfigured: emailReady, teamInviteEmail } = require("../services/email");
+const { isConfigured: emailReady } = require("../services/email");
+const autoEmails = require("../services/autoEmails");
 const { returnUrlFor } = require("../utils/returnUrl");
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -235,7 +236,8 @@ router.post("/invite-emails", authMiddleware, async (req, res) => {
             : "Every place in your team is taken or invited.",
       });
     }
-    if (!emailReady())
+    // Round 22: the invitation is edited (and can be switched off) in Admin > Emails.
+    if (!emailReady() || (await autoEmails.isSwitchedOff("team_invite")))
       return res.status(503).json({
         message: "Email invitations aren't available right now. Copy the invitation link instead.",
       });
@@ -246,15 +248,17 @@ router.post("/invite-emails", authMiddleware, async (req, res) => {
     let sent = 0;
     for (const email of fresh) {
       try {
-        await sendEmail({
-          to: email,
-          ...teamInviteEmail({
-            adminName: admin?.fullName || admin?.username,
-            teamName: team.name,
-            planName,
-            url,
-          }),
-        });
+        const ok = await autoEmails.sendAutoEmailTo(
+          "team_invite",
+          { email },
+          {
+            admin: admin?.fullName || admin?.username || "Your Team Admin",
+            team: team.name || "a Loquiex team",
+            plan: planName,
+          },
+          { buttonUrl: url },
+        );
+        if (!ok) continue;
         sent += 1;
         await Team.updateOne(
           { _id: team._id, "invites.email": { $ne: email } },

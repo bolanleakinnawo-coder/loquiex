@@ -670,3 +670,27 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* Round 22 (Sheriff): automatic notifications in Admin > Notifications. */
+.adm-history li.is-editing .adm-history-main {
+  grid-column: 2 / -1;
+}
+
+.adm-history-main .adm-field > span {
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.adm-auto .adm-sub {
+  margin: 0 0 12px;
+}
+
+.adm-auto > .adm-form,
+.adm-auto > .adm-primary {
+  margin-top: 14px;
+}
+
+.adm-auto .adm-when .adm-field {
+  flex: 1 1 140px;
+}

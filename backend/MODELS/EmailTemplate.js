@@ -9,6 +9,10 @@ const emailTemplateSchema = new mongoose.Schema(
     subject: { type: String, default: "", maxlength: 200 },
     body: { type: String, default: "", maxlength: 5000 },
     enabled: { type: Boolean, default: true },
+    // Round 22 (Sheriff): optional button. null = use the starting setting.
+    buttonOn: { type: Boolean, default: null },
+    buttonLabel: { type: String, default: "", maxlength: 60 },
+    buttonLink: { type: String, default: "", maxlength: 500 },
     sentCount: { type: Number, default: 0 },
     lastSentAt: { type: Date, default: null },
   },

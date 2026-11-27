@@ -22,6 +22,8 @@
 //   sub_expiring     3 days before the plan ends
 //   sub_expired      the plan has ended
 //   account_deleted  the member deleted their account (round 19)
+//   team_invite      a Team Admin invites someone by email (round 22)
+//                    {admin} who invited them, {team} the team, {plan} the team plan
 const User = require("../MODELS/User");
 const EmailTemplate = require("../MODELS/EmailTemplate");
 const { sendEmail, adminTextEmail, isConfigured } = require("./email");
@@ -109,6 +111,17 @@ const DEFAULTS = {
       "Hi {name},\n\nYour Loquiex account, recordings, feedback and wins have been deleted, as you asked. You're welcome back any time.\n\nIf you didn't do this, reply to this email straight away so we can help.",
     button: null,
   },
+  // Round 22 (Sheriff): the team plan invitation, now editable here. The
+  // starting text is the wording the invitation already used.
+  team_invite: {
+    label: "Team plan invitation",
+    when: "When a Team Admin invites someone by email",
+    subject: "You've been invited to join {team} on Loquiex",
+    body:
+      "{admin} invited you to join {team} on Loquiex.\n\nTeam plan: {plan}. Your subscription cost is covered by the team.\n\nAlready have a Loquiex account? Sign in to join your team. If you weren't expecting this, you can ignore this email.",
+    // The link is each team's own invitation link (set when it is sent).
+    button: { label: "Accept invitation", path: "" },
+  },
 };
 
 const KEYS = Object.keys(DEFAULTS);
@@ -146,6 +159,41 @@ function fill(text, values) {
   );
 }
 
+// Round 22 (Sheriff): each email's button can be switched on or off in
+// Admin > Emails, with its own text and link. A link may be a full https://
+// address or a page in the app starting with "/" (e.g. /app/membership).
+// The team invitation's link is always that team's own invitation link.
+const FIXED_LINK = new Set(["team_invite"]);
+
+function buttonSettings(key, row) {
+  const d = DEFAULTS[key];
+  const saved = row && typeof row.buttonOn === "boolean";
+  const base = appUrl();
+  const defaultLink = d.button?.path ? `${base}${d.button.path}` : "";
+  return {
+    on: saved ? row.buttonOn : Boolean(d.button),
+    label: (saved && row.buttonLabel) || d.button?.label || "",
+    link: FIXED_LINK.has(key) ? "" : (saved && row.buttonLink) || defaultLink,
+    fixedLink: FIXED_LINK.has(key),
+  };
+}
+
+function resolveButton(key, row, buttonUrl) {
+  const b = buttonSettings(key, row);
+  if (!b.on || !b.label) return null;
+  let url = b.fixedLink ? buttonUrl : b.link;
+  if (url && url.startsWith("/")) url = appUrl() ? `${appUrl()}${url}` : "";
+  if (!url || !/^https?:\/\//i.test(url)) return null;
+  return { label: b.label, url };
+}
+
+function cleanLink(value) {
+  const link = String(value || "").trim().slice(0, 500);
+  if (!link) return "";
+  if (link.startsWith("/") || /^https?:\/\/\S+$/i.test(link)) return link;
+  return null; // not a link we can use
+}
+
 // Every email with the admin's saved text (or the starting text).
 async function listTemplates() {
   const rows = await EmailTemplate.find({ key: { $in: KEYS } }).lean();
@@ -160,18 +208,31 @@ async function listTemplates() {
       subject: row?.subject || d.subject,
       body: row?.body || d.body,
       enabled: row ? row.enabled !== false : true,
+      button: buttonSettings(key, row),
       sentCount: row?.sentCount || 0,
       lastSentAt: row?.lastSentAt || null,
     };
   });
 }
 
-async function saveTemplate(key, { subject, body, enabled }) {
+// Throws an Error with .status 400 when the button settings can't be used.
+async function saveTemplate(key, { subject, body, enabled, button }) {
   if (!DEFAULTS[key]) return null;
   const set = {};
   if (typeof subject === "string") set.subject = subject.trim().slice(0, 200);
   if (typeof body === "string") set.body = body.trim().slice(0, 5000);
   if (typeof enabled === "boolean") set.enabled = enabled;
+  if (button && typeof button === "object" && typeof button.on === "boolean") {
+    const label = String(button.label || "").trim().slice(0, 60);
+    const link = FIXED_LINK.has(key) ? "" : cleanLink(button.link);
+    const bad = (message) => Object.assign(new Error(message), { status: 400 });
+    if (link === null) throw bad("The button link must start with https:// or /.");
+    if (button.on && !label) throw bad("Add the button text, or switch the button off.");
+    if (button.on && !FIXED_LINK.has(key) && !link) throw bad("Add the button link, or switch the button off.");
+    set.buttonOn = button.on;
+    set.buttonLabel = label;
+    set.buttonLink = link;
+  }
   await EmailTemplate.updateOne({ key }, { $set: set }, { upsert: true });
   return (await listTemplates()).find((t) => t.key === key);
 }
@@ -205,11 +266,10 @@ async function sendAutoEmail(key, userOrId, values = {}, { onceKey } = {}) {
   if (!claimed.modifiedCount) return false;
 
   const all = { name: firstName(user), ...values };
-  const base = appUrl();
   const mail = adminTextEmail({
     subject: fill(row?.subject || d.subject, all),
     body: fill(row?.body || d.body, all),
-    button: d.button && base ? { label: d.button.label, url: `${base}${d.button.path}` } : null,
+    button: resolveButton(key, row),
   });
   try {
     const sent = await sendEmail({ to: user.email, ...mail });
@@ -231,18 +291,18 @@ async function sendAutoEmail(key, userOrId, values = {}, { onceKey } = {}) {
 
 // Sends email `key` to an address with no saved account (the account was
 // just deleted), so there is no once-only log. Returns true when sent.
-async function sendAutoEmailTo(key, { email, name } = {}, values = {}) {
+// `buttonUrl` replaces the button's usual link (the team invitation link).
+async function sendAutoEmailTo(key, { email, name } = {}, values = {}, { buttonUrl } = {}) {
   const d = DEFAULTS[key];
   if (!d || !email || !isConfigured()) return false;
   const row = await EmailTemplate.findOne({ key }).lean();
   if (row && row.enabled === false) return false;
   const first = String(name || "").trim().split(/\s+/)[0] || "there";
   const all = { name: first, ...values };
-  const base = appUrl();
   const mail = adminTextEmail({
     subject: fill(row?.subject || d.subject, all),
     body: fill(row?.body || d.body, all),
-    button: d.button && base ? { label: d.button.label, url: `${base}${d.button.path}` } : null,
+    button: resolveButton(key, row, buttonUrl),
   });
   const sent = await sendEmail({ to: email, ...mail });
   if (sent) {
@@ -406,7 +466,14 @@ function startAutoEmailJob() {
   setTimeout(tick, 60 * 1000).unref?.();
 }
 
+// Round 22: true when the admin has switched email `key` off.
+async function isSwitchedOff(key) {
+  const row = await EmailTemplate.findOne({ key }, { enabled: 1 }).lean();
+  return Boolean(row && row.enabled === false);
+}
+
 module.exports = {
+  isSwitchedOff,
   EMAIL_KEYS: KEYS,
   EMAIL_DEFAULTS: DEFAULTS,
   listTemplates,

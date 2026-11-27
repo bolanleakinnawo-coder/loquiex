@@ -103,6 +103,8 @@ startScheduledPracticeJob();
 // notifications the admin scheduled for later.
 require("./services/autoEmails").startAutoEmailJob();
 require("./services/adminNotifications").startScheduledNotificationJob();
+// Round 22 (Sheriff): automatic notifications set up in Admin > Notifications.
+require("./services/autoNotifications").startAutoNotificationJob();
 // Applies paid Paystack payments every few minutes even if a webhook is missed.
 require("./services/billing").startPendingPaymentSweep();
 

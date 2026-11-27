@@ -19,12 +19,17 @@ const WORDS = {
   sub_expiring: ["{name}", "{plan}", "{date}"],
   sub_expired: ["{name}", "{plan}", "{date}"],
   account_deleted: ["{name}"],
+  team_invite: ["{admin}", "{team}", "{plan}"],
 };
 
 function EmailCard({ email, onSaved }) {
   const [open, setOpen] = useState(false);
   const [subject, setSubject] = useState(email.subject);
   const [body, setBody] = useState(email.body);
+  // Round 22 (Sheriff): optional brand button with its own text and link.
+  const [buttonOn, setButtonOn] = useState(email.button.on);
+  const [buttonLabel, setButtonLabel] = useState(email.button.label);
+  const [buttonLink, setButtonLink] = useState(email.button.link);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState("");
 
@@ -42,7 +47,13 @@ function EmailCard({ email, onSaved }) {
     }
   };
 
-  const changed = subject !== email.subject || body !== email.body;
+  const buttonChanged =
+    buttonOn !== email.button.on ||
+    buttonLabel !== email.button.label ||
+    buttonLink !== email.button.link;
+  const changed = subject !== email.subject || body !== email.body || buttonChanged;
+  const buttonReady =
+    !buttonOn || (buttonLabel.trim() && (email.button.fixedLink || buttonLink.trim()));
 
   return (
     <article className={`adm-card adm-email${email.enabled ? "" : " is-off"}`}>
@@ -84,11 +95,41 @@ function EmailCard({ email, onSaved }) {
               You can use {WORDS[email.key].join(", ")}. Leave a blank line to start a new paragraph.
             </small>
           </label>
+          <label className="adm-check">
+            <input type="checkbox" checked={buttonOn} onChange={(e) => setButtonOn(e.target.checked)} />
+            Add a button
+          </label>
+          {buttonOn && (
+            <>
+              <label className="adm-field">
+                <span>Button text</span>
+                <input value={buttonLabel} maxLength={60} onChange={(e) => setButtonLabel(e.target.value)} />
+              </label>
+              {email.button.fixedLink ? (
+                <small className="adm-note">The button opens each team&apos;s own invitation link.</small>
+              ) : (
+                <label className="adm-field">
+                  <span>Button link</span>
+                  <input
+                    type="url"
+                    inputMode="url"
+                    value={buttonLink}
+                    maxLength={500}
+                    placeholder="https://loquiex.app/app/membership"
+                    onChange={(e) => setButtonLink(e.target.value)}
+                  />
+                  <small>Paste a full link starting with https://</small>
+                </label>
+              )}
+            </>
+          )}
           <button
             type="button"
             className="adm-primary"
-            disabled={busy || !changed || !subject.trim() || !body.trim()}
-            onClick={() => save({ subject, body })}
+            disabled={busy || !changed || !subject.trim() || !body.trim() || !buttonReady}
+            onClick={() =>
+              save({ subject, body, button: { on: buttonOn, label: buttonLabel, link: buttonLink } })
+            }
           >
             {busy ? "Saving…" : "Save"}
           </button>
