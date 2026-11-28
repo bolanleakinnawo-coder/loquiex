@@ -9,17 +9,17 @@ import "./Admin.css";
 import "./AdminRound14.css";
 
 const WORDS = {
-  welcome: ["{name}"],
-  trial_started: ["{name}", "{date}"],
-  trial_ending: ["{name}", "{date}"],
-  trial_ended: ["{name}", "{date}"],
-  sub_confirmed: ["{name}", "{plan}", "{date}"],
-  payment_success: ["{name}", "{item}", "{amount}", "{reference}", "{date}"],
-  payment_failed: ["{name}", "{item}", "{amount}", "{reference}"],
-  sub_expiring: ["{name}", "{plan}", "{date}"],
-  sub_expired: ["{name}", "{plan}", "{date}"],
-  account_deleted: ["{name}"],
-  team_invite: ["{admin}", "{team}", "{plan}"],
+  welcome: ["{name}", "{support}"],
+  trial_started: ["{name}", "{date}", "{time}", "{support}"],
+  trial_ending: ["{name}", "{date}", "{time}", "{support}"],
+  trial_ended: ["{name}", "{date}", "{time}", "{support}"],
+  sub_confirmed: ["{name}", "{plan}", "{date}", "{renewal}", "{start}", "{method}", "{support}"],
+  payment_success: ["{name}", "{item}", "{amount}", "{reference}", "{date}", "{renewal}", "{start}", "{method}", "{support}"],
+  payment_failed: ["{name}", "{item}", "{amount}", "{reference}", "{support}"],
+  sub_expiring: ["{name}", "{plan}", "{date}", "{support}"],
+  sub_expired: ["{name}", "{plan}", "{date}", "{support}"],
+  account_deleted: ["{name}", "{support}"],
+  team_invite: ["{admin}", "{team}", "{plan}", "{support}"],
 };
 
 function EmailCard({ email, onSaved }) {

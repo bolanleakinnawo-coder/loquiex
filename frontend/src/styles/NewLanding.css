@@ -708,3 +708,554 @@
   margin-left: auto;
   margin-right: auto;
 }
+
+/* ---------- Real app pictures (Sheriff, 2026-11-27) ---------- */
+.nl-shot {
+  width: min(320px, 82vw);
+  margin: 32px auto 0;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 40px;
+  background: var(--nl-alt);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+}
+
+.nl-alt .nl-shot {
+  background: var(--bg-primary);
+}
+
+.nl-shot img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 32px;
+}
+
+.nl-hero .nl-shot {
+  margin-top: 40px;
+}
+
+.nl-mini-shot {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+}
+
+.nl-mini-shot img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+/* Big screens: words on the left, picture on the right (Sheriff). Phone
+   stays centred, with the picture under the words. */
+@media (min-width: 1024px) {
+  .nl-two {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "head shot"
+      "more shot";
+    grid-template-rows: auto 1fr;
+    column-gap: 80px;
+    align-items: center;
+    text-align: left;
+  }
+
+  .nl-two > .nl-two-head {
+    grid-area: head;
+    align-self: end;
+  }
+
+  .nl-two > .nl-shot {
+    grid-area: shot;
+    margin: 0;
+  }
+
+  .nl-two > .nl-two-more {
+    grid-area: more;
+    align-self: start;
+    max-width: 560px;
+    margin: 16px 0 0;
+  }
+
+  .nl-two .nl-head {
+    max-width: 620px;
+    margin: 0;
+  }
+
+  .nl-two:not(:has(.nl-two-more)) > .nl-two-head {
+    grid-row: 1 / -1;
+    align-self: center;
+  }
+
+  .nl-hero .nl-two-head {
+    max-width: 640px;
+  }
+
+  .nl-hero .nl-hero-lead {
+    margin-left: 0;
+  }
+
+  .nl-hero .nl-shot {
+    margin-top: 0;
+  }
+}
+
+@media (min-width: 1024px) {
+  .nl-hero .nl-h1 {
+    font-size: clamp(38px, 3.6vw, 52px);
+  }
+
+  .nl-hero .nl-h1 span {
+    white-space: nowrap;
+  }
+}
+
+/* ---------- Hero phone video (Sheriff, 2026-11-28) ---------- */
+.nl-phone {
+  width: min(300px, 74vw);
+  margin: 40px auto 0;
+}
+
+.nl-phone-video {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 640 / 1318;
+  background: transparent;
+}
+
+@media (min-width: 1024px) {
+  .nl-two > .nl-phone {
+    grid-area: shot;
+    margin: 0;
+  }
+}
+
+/* ---------- 01 Solo practice desktop picture (Sheriff, 2026-11-28) ---------- */
+.nl-shot-wide {
+  width: 100%;
+  max-width: 640px;
+  margin: 32px auto 0;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  background: var(--nl-alt);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+}
+
+.nl-shot-wide img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 14px;
+}
+
+@media (min-width: 1024px) {
+  .nl-two > .nl-shot-wide {
+    grid-area: shot;
+    width: min(620px, 48vw);
+    margin: 0;
+  }
+}
+
+/* ---------- Hero Home picture + bigger title (Sheriff, 2026-11-28) ---------- */
+.nl-hero .nl-shot-wide {
+  margin-top: 40px;
+}
+
+@media (min-width: 601px) {
+  .nl-hero .nl-h1 {
+    font-size: clamp(36px, 5.8vw, 62px);
+  }
+}
+
+@media (min-width: 1024px) {
+  /* Big title across the page, Home picture wide underneath. */
+  .nl-hero .nl-two {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
+
+  .nl-hero .nl-two-head {
+    max-width: none;
+  }
+
+  .nl-hero .nl-hero-lead {
+    margin-left: auto;
+  }
+
+  .nl-hero .nl-h1 {
+    font-size: clamp(48px, 4.4vw, 62px);
+  }
+
+  .nl-hero .nl-two > .nl-shot-wide {
+    width: min(1000px, 100%);
+    max-width: none;
+    margin-top: 56px;
+  }
+}
+
+/* ---------- "The Loquiex experience" on cream (Sheriff, 2026-11-28) ----------
+   Same cream as the light hero design option (#f1ece0). */
+.nl-cream {
+  background: var(--text-primary);
+}
+
+.nl-cream .nl-eyebrow {
+  color: var(--olive-primary);
+}
+
+.nl-cream .nl-h2 {
+  color: #1a1b18;
+}
+
+.nl-cream .nl-lead {
+  color: #4a4a40;
+}
+
+/* ---------- How Loquiex works: numbered steps (Sheriff, 2026-11-28) ----------
+   Follows the "Your journey with Loquiex" design: a numbered circle on a
+   line, cards alternating dark and sage green. */
+.nl-how {
+  text-align: left;
+}
+
+.nl-how-head {
+  max-width: 760px;
+  margin-bottom: 40px;
+}
+
+.nl-steps2 {
+  display: grid;
+  gap: 28px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.nl-st {
+  position: relative;
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  gap: 14px;
+  scroll-margin-top: 88px;
+}
+
+/* The line joining the numbers. */
+.nl-st::before {
+  content: "";
+  position: absolute;
+  top: 36px;
+  bottom: -28px;
+  left: 17.5px;
+  width: 1px;
+  background: var(--border);
+  transform-origin: top;
+}
+
+.nl-st:last-child::before {
+  display: none;
+}
+
+.nl-st-num {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--text-secondary);
+  border-radius: 50%;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.nl-st-card {
+  min-width: 0;
+  padding: 22px 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--nl-card-dark, #1b1d19);
+}
+
+.nl-st-card.is-olive {
+  border-color: var(--olive-primary);
+  background: var(--olive-primary);
+}
+
+.nl-st-eyebrow {
+  margin-bottom: 10px;
+  color: var(--olive-bright);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.nl-st-title {
+  margin-bottom: 10px;
+  color: var(--text-primary);
+  font-size: clamp(20px, 2.2vw, 30px);
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+}
+
+.nl-st-lead {
+  color: var(--text-secondary);
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+.nl-st-card.is-olive .nl-st-eyebrow {
+  color: rgba(241, 236, 222, 0.78);
+}
+
+.nl-st-card.is-olive .nl-st-lead,
+.nl-st-card.is-olive .nl-meta,
+.nl-st-card.is-olive .nl-faq p {
+  color: rgba(241, 236, 222, 0.88);
+}
+
+.nl-st-pic {
+  overflow: hidden;
+  margin-top: 22px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--bg-primary);
+}
+
+.nl-st-card.is-olive .nl-st-pic {
+  border-color: rgba(14, 15, 17, 0.45);
+  box-shadow: 0 10px 30px rgba(14, 15, 17, 0.25);
+}
+
+.nl-st-pic img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.nl-st-more {
+  margin-top: 22px;
+}
+
+.nl-st .nl-list,
+.nl-st .nl-faqs,
+.nl-st .nl-plans {
+  max-width: none;
+  margin: 8px 0 0;
+}
+
+.nl-st-card.is-olive .nl-item,
+.nl-st-card.is-olive .nl-faq {
+  border-color: rgba(241, 236, 222, 0.22);
+}
+
+.nl-st-card.is-olive .nl-faq summary svg {
+  color: var(--text-primary);
+}
+
+/* Plans on the sage card: give each plan a dark card so they stand out. */
+.nl-st-card.is-olive .lp-plan {
+  background: var(--bg-card);
+}
+
+.nl-st-card.is-olive .lp-plan-dark {
+  border-color: rgba(241, 236, 222, 0.35);
+  background: var(--olive-bright);
+}
+
+@media (min-width: 1024px) {
+  .nl-how-head {
+    margin-bottom: 56px;
+  }
+
+  .nl-steps2 {
+    gap: 36px;
+  }
+
+  .nl-st {
+    grid-template-columns: 44px minmax(0, 1fr);
+    gap: 24px;
+  }
+
+  .nl-st::before {
+    top: 44px;
+    bottom: -36px;
+    left: 21.5px;
+  }
+
+  .nl-st-num {
+    width: 44px;
+    height: 44px;
+    font-size: 14px;
+  }
+
+  .nl-st-card {
+    padding: 36px;
+  }
+
+  /* Words left, picture right. */
+  .nl-st-card.has-pic {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr);
+    gap: 40px;
+    align-items: center;
+  }
+
+  .nl-st-card.has-pic .nl-st-pic {
+    margin-top: 0;
+  }
+
+  .nl-st .nl-plans {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1200px) {
+  .nl-st .nl-plans {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+/* ---------- More to explore cards: smaller text, tidier (Sheriff, 2026-11-28) ---------- */
+.nl-st .nl-grid3 {
+  display: grid;
+  gap: 14px;
+  margin-top: 4px;
+}
+
+.nl-st .nl-mini {
+  padding: 16px;
+  border-color: rgba(14, 15, 17, 0.35);
+  border-radius: 16px;
+  background: var(--bg-card);
+  box-shadow: 0 10px 30px rgba(14, 15, 17, 0.2);
+}
+
+.nl-st .nl-chip-tag {
+  padding: 3px 9px;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+}
+
+.nl-st .nl-mini-name {
+  margin: 10px 0 12px;
+  font-size: 14px;
+}
+
+.nl-st .nl-mini-shot {
+  border-radius: 12px;
+}
+
+@media (min-width: 1024px) {
+  .nl-st .nl-grid3 {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 18px;
+  }
+}
+
+/* ---------- Animate in on scroll ---------- */
+@media (prefers-reduced-motion: no-preference) {
+  .nl-anim [data-reveal] {
+    opacity: 0;
+    transform: translateY(28px);
+    transition:
+      opacity 0.7s ease var(--d, 0ms),
+      transform 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) var(--d, 0ms);
+  }
+
+  .nl-anim [data-reveal].is-in {
+    opacity: 1;
+    transform: none;
+  }
+
+  /* The number pops in and the line draws down to the next step. */
+  .nl-anim .nl-st[data-reveal] .nl-st-num {
+    transform: scale(0.6);
+    transition: transform 0.5s cubic-bezier(0.3, 1.4, 0.5, 1) 0.15s;
+  }
+
+  .nl-anim .nl-st[data-reveal].is-in .nl-st-num {
+    transform: none;
+  }
+
+  .nl-anim .nl-st[data-reveal]::before {
+    transform: scaleY(0);
+    transition: transform 1s ease 0.3s;
+  }
+
+  .nl-anim .nl-st[data-reveal].is-in::before {
+    transform: scaleY(1);
+  }
+
+  /* The picture slides in from the side a moment after the card. */
+  .nl-anim .nl-st[data-reveal] .nl-st-pic {
+    opacity: 0;
+    transform: translateX(24px);
+    transition:
+      opacity 0.7s ease 0.25s,
+      transform 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) 0.25s;
+  }
+
+  .nl-anim .nl-st[data-reveal].is-in .nl-st-pic {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Show the top of each More to explore screen at the same height, so the
+   three cards line up instead of running long. */
+.nl-st .nl-mini-shot {
+  position: relative;
+  max-height: 300px;
+}
+
+.nl-st .nl-mini-shot::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 0;
+  height: 56px;
+  background: linear-gradient(to bottom, rgba(19, 21, 19, 0), var(--bg-card));
+  pointer-events: none;
+}
+
+.nl-st .nl-mini-shot img {
+  height: auto;
+}
+
+/* FAQ card on off-white (Sheriff, 2026-11-28), same cream as The Loquiex
+   experience. */
+.nl-st-card.is-cream {
+  border-color: var(--text-primary);
+  background: var(--text-primary);
+}
+
+.nl-st-card.is-cream .nl-st-eyebrow {
+  color: var(--olive-primary);
+}
+
+.nl-st-card.is-cream .nl-st-title,
+.nl-st-card.is-cream .nl-faq summary {
+  color: #1a1b18;
+}
+
+.nl-st-card.is-cream .nl-faq {
+  border-color: rgba(26, 27, 24, 0.16);
+}
+
+.nl-st-card.is-cream .nl-faq summary svg {
+  color: var(--olive-primary);
+}
+
+.nl-st-card.is-cream .nl-faq p {
+  color: #4a4a40;
+}

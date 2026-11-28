@@ -3,6 +3,7 @@
 // sheriff-screen-recording-2026-11-27.mov), centred. Hero, Membership, FAQs,
 // final call to action and footer keep the wording of the previous version;
 // the other sections use the recording's wording. Please don't reword it.
+// Pictures are real Loquiex screens (assets/landing-app/), Sheriff 2026-11-27.
 // The older landing page (Pages/LandingPage.jsx) is still kept, unrouted.
 
 import { useEffect, useState } from "react";
@@ -12,21 +13,23 @@ import {
   ArrowUpRight,
   BarChart3,
   BookOpen,
-  Flame,
   Menu,
   MessagesSquare,
-  Mic,
   Plus,
-  Shuffle,
-  SlidersHorizontal,
-  Sparkles,
   Trophy,
-  User,
   Users,
   X,
 } from "lucide-react";
 
 import brandLogo from "../assets/landing/loquiex-logo.png";
+import shotHome from "../assets/landing-app/home-desktop.webp";
+import shotSolo from "../assets/landing-app/solo-practice-desktop.webp";
+import shotFeedback from "../assets/landing-app/feedback-desktop.webp";
+import shotCall from "../assets/landing-app/group-practice-desktop.webp";
+import shotWord from "../assets/landing-app/word-of-the-day.webp";
+import shotWin from "../assets/landing-app/share-a-win.webp";
+import shotLeader from "../assets/landing-app/leaderboard.webp";
+import shotProfile from "../assets/landing-app/your-stats-desktop.webp";
 import { PLANS as APP_PLANS } from "../data/plans";
 import "../styles/PublicLanding.css";
 import "../styles/NewLanding.css";
@@ -38,33 +41,27 @@ const NAV_LINKS = [
   { label: "FAQs", href: "#faqs" },
 ];
 
-const JAR_CATEGORIES =
-  "Opinions & Arguments · Storytelling · Real Conversations · Explain Clearly · Analogy · One Word";
-
-const FEEDBACK_AREAS = ["Clarity", "Fillers", "Grammar", "Pace", "Pauses", "Organisation"];
-
 const MORE = [
   {
-    tag: "Learn",
+    tag: "Vocabulary",
     icon: BookOpen,
     name: "Word of the Day",
-    title: "Articulate",
-    body: "Learn a new word every day and expand your vocabulary.",
-    big: true,
+    image: shotWord,
+    alt: "Word of the Day card: Articulate",
   },
   {
     tag: "Celebrate",
     icon: Trophy,
     name: "Share Your Win",
-    title: "Your wins deserve to be shared.",
-    body: "Share your communication wins and celebrate your progress with the community.",
+    image: shotWin,
+    alt: "The Share a Win screen",
   },
   {
     tag: "Compete",
     icon: BarChart3,
     name: "Loquiex Leaderboard",
-    title: "A little friendly competition.",
-    body: "See how members are participating and find your place on the leaderboard.",
+    image: shotLeader,
+    alt: "The Loquiex Leaderboard",
   },
 ];
 
@@ -110,18 +107,6 @@ const FAQS = [
     q: "Can I track my progress?",
     a: "Yes. Your stats and milestones help you follow your practice activity and recognise your progress.",
   },
-  {
-    q: "What is the Loquiex dashboard?",
-    a: "Your dashboard brings together your practice activity and community information, including your position on the leaderboard.",
-  },
-  {
-    q: "Are there learner discounts?",
-    a: "Learner discount benefits are included in the Flourish and Infinity plans. Eligibility and verification requirements apply.",
-  },
-  {
-    q: "Can I change my membership plan?",
-    a: "Plan changes are subject to the subscription and billing terms shown when you manage your membership.",
-  },
 ];
 
 const FOOTER_SUPPORT = [
@@ -140,16 +125,6 @@ function hasToken() {
   }
 }
 
-function SectionHead({ tag, title, lead }) {
-  return (
-    <div className="nl-head">
-      <span className="nl-tag">{tag}</span>
-      <h2 className="nl-h2">{title}</h2>
-      {lead && <p className="nl-lead">{lead}</p>}
-    </div>
-  );
-}
-
 function Faq({ q, a }) {
   return (
     <details className="nl-faq">
@@ -162,11 +137,66 @@ function Faq({ q, a }) {
   );
 }
 
+// One numbered step of "How Loquiex works". Cards alternate dark and sage
+// green (olive). With a picture, the words sit left and the picture right on
+// big screens; "wide" steps put their content under the words.
+function Step({ id, n, olive, cream, wide, label, title, lead, picture, pictureAlt, children }) {
+  const two = Boolean(picture) && !wide;
+  return (
+    <li id={id} className="nl-st" data-reveal>
+      <span className="nl-st-num" aria-hidden="true">
+        {n}
+      </span>
+      <div className={`nl-st-card${olive ? " is-olive" : ""}${cream ? " is-cream" : ""}${two ? " has-pic" : ""}`}>
+        <div className="nl-st-words">
+          <p className="nl-st-eyebrow">
+            Step {n} · {label}
+          </p>
+          <h3 className="nl-st-title">{title}</h3>
+          {lead && <p className="nl-st-lead">{lead}</p>}
+          {two && children}
+        </div>
+        {picture && (
+          <div className="nl-st-pic">
+            <img src={picture} alt={pictureAlt} loading="lazy" />
+          </div>
+        )}
+        {!two && children && <div className="nl-st-more">{children}</div>}
+      </div>
+    </li>
+  );
+}
+
+// Adds "is-in" to every [data-reveal] element as it scrolls into view, so the
+// steps animate in. Without IntersectionObserver everything simply shows.
+function useReveal() {
+  useEffect(() => {
+    const root = document.querySelector(".nl");
+    if (!root || typeof IntersectionObserver === "undefined") return undefined;
+    root.classList.add("nl-anim");
+    const items = root.querySelectorAll("[data-reveal]");
+    const io = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((e) => {
+          if (e.isIntersecting) {
+            e.target.classList.add("is-in");
+            io.unobserve(e.target);
+          }
+        });
+      },
+      { rootMargin: "0px 0px -12% 0px", threshold: 0.08 }
+    );
+    items.forEach((el) => io.observe(el));
+    return () => io.disconnect();
+  }, []);
+}
+
 export default function NewLandingPage() {
   const signedIn = hasToken();
   const startTo = signedIn ? "/app/home" : "/register";
   const planTo = signedIn ? "/app/membership" : "/register";
   const [menuOpen, setMenuOpen] = useState(false);
+  useReveal();
 
   useEffect(() => {
     const previous = document.title;
@@ -251,7 +281,8 @@ export default function NewLandingPage() {
       <main id="top">
         {/* ---------- Hero ---------- */}
         <section className="nl-sec nl-hero">
-          <div className="lp-wrap">
+          <div className="lp-wrap nl-two">
+            <div className="nl-two-head">
             <span className="nl-pill">
               <span className="nl-pill-dot" aria-hidden="true" />
               Your voice has room to grow
@@ -267,323 +298,208 @@ export default function NewLandingPage() {
             <Link className="lp-btn nl-hero-btn" to={startTo}>
               Start practising <ArrowUpRight size={17} aria-hidden="true" />
             </Link>
-
-            <div className="nl-card nl-space">
-              <div className="nl-row">
-                <span className="nl-cap">Your practice space</span>
-                <span className="nl-live">Live preview</span>
-              </div>
-              <div className="nl-panel">
-                <span className="nl-cap">Today's topic</span>
-                <h3 className="nl-panel-title">
-                  Is being understood more important than being impressive?
-                </h3>
-                <div className="nl-row nl-meta">
-                  <span>Opinions &amp; Arguments</span>
-                  <span>Level 2</span>
-                </div>
-                <div className="nl-row nl-split">
-                  <span>Your speaking session</span>
-                  <Mic size={17} aria-hidden="true" />
-                </div>
-              </div>
-              <p className="nl-hint">
-                <Sparkles size={15} aria-hidden="true" /> Pick a topic. Speak. Get
-                better.
-              </p>
+            </div>
+            <div className="nl-shot-wide">
+              <img src={shotHome} alt="The Loquiex Home screen: today's practice, word of the day and recent practices" />
             </div>
           </div>
         </section>
 
         {/* ---------- The Loquiex experience ---------- */}
-        <section className="nl-sec nl-alt" id="platform">
+        <section className="nl-sec nl-cream" id="platform">
           <div className="lp-wrap nl-head">
             <p className="nl-eyebrow">The Loquiex experience</p>
             <h2 className="nl-h2">
-              Good communication takes more than knowing the right words.
+              So, how do you actually become a better communicator?
             </h2>
             <p className="nl-lead">
-              It's about organising your thoughts, expressing them clearly and
-              knowing how to communicate in different situations.
+              You learn, you practise, you make mistakes, you get feedback and
+              you keep going. Loquiex gives you the tools and opportunities to do
+              just that.
             </p>
           </div>
         </section>
 
-        {/* ---------- 01 Solo practice ---------- */}
-        <section className="nl-sec" id="how-it-works">
+        {/* ---------- How Loquiex works: 01 to 08 as numbered steps ----------
+            Follows the "Your journey with Loquiex" design (Sheriff,
+            2026-11-28): numbered circles on a line, cards alternating dark
+            and sage green, each one animating in as it scrolls into view. */}
+        <section className="nl-sec nl-how" id="how-it-works">
           <div className="lp-wrap">
-            <SectionHead
-              tag="01 · Solo practice"
-              title="Make speaking a regular practice."
-              lead="Explore different ways to practise, challenge your thinking and become more comfortable expressing yourself."
-            />
-            <div className="nl-card">
-              <div className="nl-row">
-                <span className="nl-sig">The signature feature</span>
-                <Sparkles size={18} className="nl-olive" aria-hidden="true" />
-              </div>
-              <h3 className="nl-card-title">Spin the Jar</h3>
-              <p className="nl-meta">Let the jar pick your next speaking topic.</p>
-              <div className="nl-jar">
-                <div className="nl-disc">
-                  <Shuffle size={26} aria-hidden="true" />
-                  <span>Spin the jar</span>
-                </div>
-                <h4>What will you speak about?</h4>
-                <p className="nl-meta">Choose a category and difficulty level.</p>
-                <Link className="lp-btn nl-btn-light" to={startTo}>
-                  Spin the jar
-                </Link>
-              </div>
-              <p className="nl-meta nl-cats">{JAR_CATEGORIES}</p>
-            </div>
-            <div className="nl-list">
-              <div className="nl-item">
-                <span className="nl-ic">
-                  <MessagesSquare size={20} aria-hidden="true" />
-                </span>
-                <div>
-                  <b>Yap Mode</b>
-                  <span className="nl-meta">
-                    Speak freely and explore your thoughts without a fixed topic.
-                  </span>
-                </div>
-              </div>
-              <div className="nl-item">
-                <span className="nl-ic">
-                  <BookOpen size={20} aria-hidden="true" />
-                </span>
-                <div>
-                  <b>Research Mode</b>
-                  <span className="nl-meta">
-                    Explore a subject, develop your understanding and practise
-                    explaining what you've learned.
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* ---------- 02 Speaking feedback ---------- */}
-        <section className="nl-sec nl-alt">
-          <div className="lp-wrap">
-            <SectionHead
-              tag="02 · Speaking feedback"
-              title="Your speaking session shouldn't end when you stop talking."
-              lead="Understand what you did well, identify what needs work and know what to focus on in your next session."
-            />
-            <div className="nl-card">
-              <div className="nl-row">
-                <span className="nl-cap">Session feedback</span>
-                <span className="nl-live">Completed</span>
-              </div>
-              <div className="nl-score">
-                <div className="nl-ring">
-                  72<small>/100</small>
-                </div>
-                <div>
-                  <b>Your speaking score</b>
-                  <p className="nl-meta">A breakdown of your communication in this session.</p>
-                </div>
-              </div>
-              <p className="nl-sub">Explore your feedback</p>
-              <div className="nl-chips">
-                {FEEDBACK_AREAS.map((c) => (
-                  <span key={c}>{c}</span>
-                ))}
-              </div>
-              <div className="nl-box">
-                <p className="nl-cap nl-olive">What you did well</p>
-                You introduced your main point early and supported it with a
-                relevant example.
-              </div>
-              <div className="nl-box">
-                <p className="nl-cap nl-olive">Your next focus</p>
-                Reduce repeated filler words and connect your ideas more smoothly.
-              </div>
-              <p className="nl-meta nl-note">
-                Transcript and detailed feedback available after your session.
+            <div className="nl-how-head" data-reveal>
+              <h2 className="nl-h2">How Loquiex works</h2>
+              <p className="nl-lead">
+                Explore the different ways to practice, learn and develop your
+                communication skills on Loquiex.
               </p>
             </div>
-          </div>
-        </section>
 
-        {/* ---------- 03 Group practice ---------- */}
-        <section className="nl-sec">
-          <div className="lp-wrap">
-            <SectionHead
-              tag="03 · Group practice"
-              title="Better conversations happen together."
-              lead="Practise with other people, exchange perspectives and learn to express yourself in a group setting."
-            />
-            <div className="nl-card">
-              <div className="nl-row">
-                <h3 className="nl-card-title nl-m0">Conversation Room</h3>
-                <Users size={18} className="nl-olive" aria-hidden="true" />
-              </div>
-              <div className="nl-panel">
-                <span className="nl-cap">Group discussion topic</span>
-                <h3 className="nl-panel-title">
-                  Can you disagree with someone and still respect their opinion?
-                </h3>
-                <div className="nl-row nl-split nl-meta">
-                  <span>Speak. Listen. Exchange ideas.</span>
-                  <MessagesSquare size={17} aria-hidden="true" />
-                </div>
-              </div>
-              <Link className="lp-btn nl-card-btn" to={startTo}>
-                Explore group practice
-              </Link>
-            </div>
-          </div>
-        </section>
-
-        {/* ---------- 04 More to explore ---------- */}
-        <section className="nl-sec nl-alt">
-          <div className="lp-wrap">
-            <SectionHead
-              tag="04 · More to explore"
-              title="There's more to Loquiex than speaking practice."
-              lead="Discover more ways to learn, celebrate your progress and connect with the Loquiex community."
-            />
-            <div className="nl-grid3">
-              {MORE.map(({ tag, icon: Icon, name, title, body, big }) => (
-                <article key={name} className="nl-mini">
-                  <div className="nl-row">
-                    <span className="nl-chip-tag">{tag}</span>
-                    <Icon size={18} className="nl-olive" aria-hidden="true" />
+            <ol className="nl-steps2">
+              <Step
+                n="01"
+                label="Solo practice"
+                title="Make speaking a regular practice."
+                lead="Explore different ways to practise, challenge your thinking and become more comfortable expressing yourself."
+                picture={shotSolo}
+                pictureAlt="Practice Time in Loquiex: Spin the Jar, Research Mode and Yap Mode"
+              >
+                <div className="nl-list">
+                  <div className="nl-item">
+                    <span className="nl-ic">
+                      <MessagesSquare size={20} aria-hidden="true" />
+                    </span>
+                    <div>
+                      <b>Yap Mode</b>
+                      <span className="nl-meta">
+                        Speak freely and explore your thoughts without a fixed topic.
+                      </span>
+                    </div>
                   </div>
-                  <p className="nl-mini-name">{name}</p>
-                  <h3 className={big ? "nl-mini-big" : "nl-mini-title"}>{title}</h3>
-                  <p className="nl-meta">{body}</p>
-                </article>
-              ))}
-            </div>
-          </div>
-        </section>
+                  <div className="nl-item">
+                    <span className="nl-ic">
+                      <BookOpen size={20} aria-hidden="true" />
+                    </span>
+                    <div>
+                      <b>Research Mode</b>
+                      <span className="nl-meta">
+                        Explore a subject, develop your understanding and practise
+                        explaining what you've learned.
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </Step>
 
-        {/* ---------- 05 Your profile ---------- */}
-        <section className="nl-sec">
-          <div className="lp-wrap">
-            <SectionHead
-              tag="05 · Your profile"
-              title="Your progress, all in one place."
-              lead="Keep track of your speaking activity, practice history and the work you're putting into becoming a better communicator."
-            />
-            <div className="nl-card">
-              <div className="nl-row nl-prof-head">
-                <span className="nl-ic nl-ic-round">
-                  <User size={22} aria-hidden="true" />
-                </span>
-                <div className="nl-grow">
-                  <b>Your profile</b>
-                  <p className="nl-meta">Your communication progress</p>
-                </div>
-                <SlidersHorizontal size={18} className="nl-soft" aria-hidden="true" />
-              </div>
-              <div className="nl-tiles">
-                <div className="nl-tile">
-                  <Mic size={18} aria-hidden="true" />
-                  <span>Speaking activity</span>
-                  <b>Practice history</b>
-                </div>
-                <div className="nl-tile">
-                  <Flame size={18} aria-hidden="true" />
-                  <span>Your consistency</span>
-                  <b>Practice streak</b>
-                </div>
-              </div>
-              <div className="nl-panel nl-hist">
-                <span className="nl-cap">Your practice history</span>
-                <div className="nl-row nl-split">
-                  <span>Solo practice</span>
-                  <ArrowUpRight size={16} className="nl-olive" aria-hidden="true" />
-                </div>
-                <div className="nl-row nl-split">
-                  <span>Group practice</span>
-                  <ArrowUpRight size={16} className="nl-olive" aria-hidden="true" />
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
+              <Step
+                n="02"
+                olive
+                label="Speaking feedback"
+                title="Your speaking session shouldn't end when you stop talking."
+                lead="Understand what you did well, identify what needs work and know what to focus on in your next session."
+                picture={shotFeedback}
+                pictureAlt="Here's how you did: a Loquiex feedback report with the overall speaking score"
+              />
 
-        {/* ---------- 06 Membership ---------- */}
-        <section className="nl-sec nl-alt" id="plans">
-          <div className="lp-wrap">
-            <SectionHead
-              tag="06 · Membership"
-              title="Find the membership that works for you."
-              lead="Start with free practice or get more access to AI feedback and group practice with a paid membership."
-            />
-            <div className="lp-plans nl-plans">
-              {PLANS.map((p) => (
-                <article
-                  key={p.id}
-                  className={`lp-plan ${p.featured ? "lp-plan-featured" : ""} ${p.dark ? "lp-plan-dark" : ""}`}
-                >
-                  {p.pill && <span className="lp-pill lp-pill-sm">{p.pill}</span>}
-                  <h3 className="lp-h4">{p.name}</h3>
-                  <p className="lp-small">{p.tagline}</p>
-                  <ul className="lp-plan-list lp-plan-bullets">
-                    {p.features.map((pt) => (
-                      <li key={pt}>{pt}</li>
-                    ))}
-                  </ul>
-                  <Link className="lp-btn lp-btn-block" to={planTo}>
-                    Explore plan
-                  </Link>
-                </article>
-              ))}
-            </div>
-          </div>
-        </section>
+              <Step
+                n="03"
+                label="Group practice"
+                title="Better conversations happen together."
+                lead="Practise with other people, exchange perspectives and learn to express yourself in a group setting."
+                picture={shotCall}
+                pictureAlt="Practice Together: Loquiex group practice with live calls"
+              />
 
-        {/* ---------- 07 Coming soon ---------- */}
-        <section className="nl-sec">
-          <div className="lp-wrap">
-            <SectionHead
-              tag="07 · Coming soon"
-              title="We're building more for you."
-              lead="More opportunities to learn and grow as a communicator are on the way."
-            />
-            <div className="nl-list">
-              <div className="nl-item">
-                <span className="nl-ic">
-                  <BookOpen size={20} aria-hidden="true" />
-                </span>
-                <div className="nl-grow">
-                  <b>Loquiex Learn</b>
-                  <span className="nl-meta">Communication learning resources.</span>
+              <Step
+                n="04"
+                olive
+                wide
+                label="More to explore"
+                title="There's more to Loquiex than speaking practice."
+                lead="Discover more ways to learn, celebrate your progress and connect with the Loquiex community."
+              >
+                <div className="nl-grid3">
+                  {MORE.map(({ tag, icon: Icon, name, image, alt }, i) => (
+                    <article
+                      key={name}
+                      className="nl-mini"
+                      data-reveal
+                      style={{ "--d": `${i * 120}ms` }}
+                    >
+                      <div className="nl-row">
+                        <span className="nl-chip-tag">{tag}</span>
+                        <Icon size={18} className="nl-olive" aria-hidden="true" />
+                      </div>
+                      <p className="nl-mini-name">{name}</p>
+                      <div className="nl-mini-shot">
+                        <img src={image} alt={alt} loading="lazy" />
+                      </div>
+                    </article>
+                  ))}
                 </div>
-                <span className="nl-soon">Soon</span>
-              </div>
-              <div className="nl-item">
-                <span className="nl-ic">
-                  <Users size={20} aria-hidden="true" />
-                </span>
-                <div className="nl-grow">
-                  <b>Loquiex Club</b>
-                  <span className="nl-meta">
-                    A community of people committed to better communication.
-                  </span>
-                </div>
-                <span className="nl-soon">Soon</span>
-              </div>
-            </div>
-          </div>
-        </section>
+              </Step>
 
-        {/* ---------- 08 FAQs ---------- */}
-        <section className="nl-sec nl-alt" id="faqs">
-          <div className="lp-wrap">
-            <SectionHead tag="08 · FAQ" title="Frequently asked questions." />
-            <div className="nl-faqs">
-              {FAQS.map((f) => (
-                <Faq key={f.q} q={f.q} a={f.a} />
-              ))}
-            </div>
+              <Step
+                n="05"
+                label="Your profile"
+                title="Your progress, all in one place."
+                lead="Keep track of your speaking activity, practice history and the work you're putting into becoming a better communicator."
+                picture={shotProfile}
+                pictureAlt="Your Stats in Loquiex: practices completed, speaking time, streak and practice activity"
+              />
+
+              <Step
+                id="plans"
+                n="06"
+                olive
+                wide
+                label="Membership"
+                title="Find the membership that works for you."
+                lead="Start with free practice or get more access to AI feedback and group practice with a paid membership."
+              >
+                <div className="lp-plans nl-plans">
+                  {PLANS.map((p, i) => (
+                    <article
+                      key={p.id}
+                      className={`lp-plan ${p.featured ? "lp-plan-featured" : ""} ${p.dark ? "lp-plan-dark" : ""}`}
+                      data-reveal
+                      style={{ "--d": `${i * 100}ms` }}
+                    >
+                      {p.pill && <span className="lp-pill lp-pill-sm">{p.pill}</span>}
+                      <h3 className="lp-h4">{p.name}</h3>
+                      <p className="lp-small">{p.tagline}</p>
+                      <ul className="lp-plan-list lp-plan-bullets">
+                        {p.features.map((pt) => (
+                          <li key={pt}>{pt}</li>
+                        ))}
+                      </ul>
+                      <Link className="lp-btn lp-btn-block" to={planTo}>
+                        Explore plan
+                      </Link>
+                    </article>
+                  ))}
+                </div>
+              </Step>
+
+              <Step
+                n="07"
+                label="Coming soon"
+                title="We're building more for you."
+                lead="More opportunities to learn and grow as a communicator are on the way."
+              >
+                <div className="nl-list">
+                  <div className="nl-item">
+                    <span className="nl-ic">
+                      <BookOpen size={20} aria-hidden="true" />
+                    </span>
+                    <div className="nl-grow">
+                      <b>Loquiex Learn</b>
+                      <span className="nl-meta">Communication learning resources.</span>
+                    </div>
+                    <span className="nl-soon">Soon</span>
+                  </div>
+                  <div className="nl-item">
+                    <span className="nl-ic">
+                      <Users size={20} aria-hidden="true" />
+                    </span>
+                    <div className="nl-grow">
+                      <b>Loquiex Club</b>
+                      <span className="nl-meta">
+                        A community of people committed to better communication.
+                      </span>
+                    </div>
+                    <span className="nl-soon">Soon</span>
+                  </div>
+                </div>
+              </Step>
+
+              <Step id="faqs" n="08" cream wide label="FAQ" title="Frequently asked questions.">
+                <div className="nl-faqs">
+                  {FAQS.map((f) => (
+                    <Faq key={f.q} q={f.q} a={f.a} />
+                  ))}
+                </div>
+              </Step>
+            </ol>
           </div>
         </section>
 

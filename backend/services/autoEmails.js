@@ -10,6 +10,12 @@
 //   {reference} the payment reference
 //   {date}      the payment date, or the date the plan or trial ends
 //   {item}      what was bought
+//   {time}      the time the free trial ends, e.g. "9:00 pm" (round 25)
+//   {renewal}   the date the plan ends / is due for renewal (round 25)
+//   {start}     the date the plan started (round 26)
+//   {method}    how they paid, e.g. "Card" or "Bank transfer" (round 27)
+//   {support}   the support email address, from EMAIL_REPLY_TO on the server,
+//               in every email (round 27)
 //
 // When each one is sent:
 //   welcome          straight after sign-up
@@ -148,9 +154,52 @@ function formatDate(d) {
   });
 }
 
+// Round 25 (Sheriff): {time}, e.g. "9:00 pm", in the member's own time zone
+// (Lagos time if we don't know it).
+function formatTime(d, timeZone) {
+  if (!d) return "";
+  const date = new Date(d);
+  if (Number.isNaN(date.getTime())) return "";
+  const opts = { hour: "numeric", minute: "2-digit", hour12: true };
+  let text;
+  try {
+    text = date.toLocaleTimeString("en-GB", { ...opts, timeZone: timeZone || "Africa/Lagos" });
+  } catch {
+    text = date.toLocaleTimeString("en-GB", { ...opts, timeZone: "Africa/Lagos" });
+  }
+  return text.replace(/\s*(am|pm)$/i, (m, x) => ` ${x.toLowerCase()}`);
+}
+
 function planName(planId) {
   const name = PLAN_LIMITS[planId]?.name;
   return name ? `Loquiex ${name.replace(/^Loquiex\s+/, "")}` : "your plan";
+}
+
+// Round 27 (Sheriff): {support} is read from one setting (EMAIL_REPLY_TO on
+// Render, where replies already go), so changing the address there updates
+// every email.
+function supportEmail() {
+  return (process.env.EMAIL_REPLY_TO || "").trim();
+}
+
+// Round 27 (Sheriff): {method}, the way Paystack says they paid, in plain words.
+const METHODS = {
+  card: "Card",
+  bank: "Bank account",
+  bank_transfer: "Bank transfer",
+  ussd: "USSD",
+  mobile_money: "Mobile money",
+  qr: "QR code",
+  apple_pay: "Apple Pay",
+  eft: "EFT",
+  opay: "OPay",
+};
+function methodOf(channel) {
+  const c = String(channel || "").trim().toLowerCase();
+  if (!c) return "";
+  if (METHODS[c]) return METHODS[c];
+  const words = c.replace(/_/g, " ");
+  return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
 function fill(text, values) {
@@ -254,6 +303,7 @@ async function sendAutoEmail(key, userOrId, values = {}, { onceKey } = {}) {
           displayUsername: 1,
           email: 1,
           emailLog: 1,
+          timeZone: 1,
         }).lean();
   if (!user?.email) return false;
 
@@ -265,7 +315,9 @@ async function sendAutoEmail(key, userOrId, values = {}, { onceKey } = {}) {
   );
   if (!claimed.modifiedCount) return false;
 
-  const all = { name: firstName(user), ...values };
+  const { timeAt, ...rest } = values;
+  const all = { name: firstName(user), support: supportEmail(), ...rest };
+  if (timeAt) all.time = formatTime(timeAt, user.timeZone);
   const mail = adminTextEmail({
     subject: fill(row?.subject || d.subject, all),
     body: fill(row?.body || d.body, all),
@@ -298,7 +350,7 @@ async function sendAutoEmailTo(key, { email, name } = {}, values = {}, { buttonU
   const row = await EmailTemplate.findOne({ key }).lean();
   if (row && row.enabled === false) return false;
   const first = String(name || "").trim().split(/\s+/)[0] || "there";
-  const all = { name: first, ...values };
+  const all = { name: first, support: supportEmail(), ...values };
   const mail = adminTextEmail({
     subject: fill(row?.subject || d.subject, all),
     body: fill(row?.body || d.body, all),
@@ -336,38 +388,55 @@ function itemOf(payment) {
   return `${planName(base)}${team} · ${months}`;
 }
 
+// Round 25 (Sheriff): {renewal} is the date the plan ends (the next renewal
+// date). Plans are prepaid, so this is when they need to renew.
+// Round 26 (Sheriff): {start} is the date the plan started.
 async function paymentSucceeded(payment) {
+  const plan = payment.kind !== "book";
+  const base = String(payment.planId || "").replace(/-team$/, "");
+  const team = String(payment.planId || "").endsWith("-team");
+  let ends = null;
+  let starts = null;
+  if (plan) {
+    const user = await User.findById(payment.user, {
+      planExpiresAt: 1,
+      planStartedAt: 1,
+      teamPlanExpiresAt: 1,
+      teamPlanStartedAt: 1,
+    }).lean();
+    ends = team ? user?.teamPlanExpiresAt : user?.planExpiresAt;
+    starts = (team ? user?.teamPlanStartedAt : user?.planStartedAt) || payment.paidAt || new Date();
+  }
   const values = {
     item: itemOf(payment),
     amount: moneyOf(payment),
     reference: payment.reference,
     date: formatDate(payment.paidAt || new Date()),
+    renewal: formatDate(ends),
+    start: formatDate(starts),
+    method: methodOf(payment.channel),
   };
   await sendAutoEmail("payment_success", payment.user, values, {
     onceKey: `payment_success:${payment.reference}`,
   });
-  if (payment.kind !== "book") {
-    const user = await User.findById(payment.user, {
-      plan: 1,
-      planExpiresAt: 1,
-      planStartedAt: 1,
-      teamPlan: 1,
-      teamPlanExpiresAt: 1,
-    }).lean();
-    const base = String(payment.planId || "").replace(/-team$/, "");
-    const team = String(payment.planId || "").endsWith("-team");
-    const ends = team ? user?.teamPlanExpiresAt : user?.planExpiresAt;
+  if (plan) {
     await sendAutoEmail(
       "sub_confirmed",
       payment.user,
-      { plan: `${planName(base)}${team ? " Team" : ""}`, date: formatDate(ends) },
+      {
+        plan: `${planName(base)}${team ? " Team" : ""}`,
+        date: formatDate(ends),
+        renewal: formatDate(ends),
+        start: formatDate(starts),
+        method: methodOf(payment.channel),
+      },
       { onceKey: `sub_confirmed:${payment.reference}` },
     );
   }
 }
 
 async function trialStarted(userId, endsAt) {
-  return sendAutoEmail("trial_started", userId, { date: formatDate(endsAt) });
+  return sendAutoEmail("trial_started", userId, { date: formatDate(endsAt), timeAt: endsAt });
 }
 
 async function paymentFailed(payment) {
@@ -392,6 +461,7 @@ async function runTimedEmails(now = new Date()) {
     displayUsername: 1,
     email: 1,
     emailLog: 1,
+    timeZone: 1,
     plan: 1,
     planExpiresAt: 1,
     planStartedAt: 1,
@@ -419,9 +489,9 @@ async function runTimedEmails(now = new Date()) {
     const left = ends - now;
     const stamp = ends.toISOString().slice(0, 10);
     if (left > 0 && left <= DAY) {
-      if (await sendAutoEmail("trial_ending", user, { date: formatDate(ends) }, { onceKey: `trial_ending:${stamp}` })) sent += 1;
+      if (await sendAutoEmail("trial_ending", user, { date: formatDate(ends), timeAt: ends }, { onceKey: `trial_ending:${stamp}` })) sent += 1;
     } else if (left <= 0 && left > -2 * DAY) {
-      if (await sendAutoEmail("trial_ended", user, { date: formatDate(ends) }, { onceKey: `trial_ended:${stamp}` })) sent += 1;
+      if (await sendAutoEmail("trial_ended", user, { date: formatDate(ends), timeAt: ends }, { onceKey: `trial_ended:${stamp}` })) sent += 1;
     }
   }
 
